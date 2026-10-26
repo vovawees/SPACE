@@ -12,6 +12,12 @@
   let name = $state("");
   let color = $state(randomPersonColor());
   let invite = $state(new URLSearchParams(location.search).get("invite") ?? "");
+  /* Приглашение на доску (/b/<id>?k=…) тоже пускает на сервер — гостем. */
+  const boardInvite = (() => {
+    const m = /^\/b\/([a-z0-9]{6,32})$/.exec(location.pathname);
+    const k = new URLSearchParams(location.search).get("k");
+    return m && k ? { board: m[1]!, token: k } : null;
+  })();
   let login = $state("");
   let password = $state("");
   let busy = $state(false);
@@ -26,7 +32,7 @@
     try {
       const me =
         mode === "guest"
-          ? await api.post<Me>("/api/auth/guest", { name: name.trim(), color, invite: invite || undefined })
+          ? await api.post<Me>("/api/auth/guest", { name: name.trim(), color, invite: invite || undefined, boardInvite: boardInvite ?? undefined })
           : await api.post<Me>("/api/auth/login", { login: login.trim(), password });
       session.me = me;
     } catch (err) {
@@ -72,10 +78,10 @@
         <span class="label">Ваш цвет</span>
         <ColorDots bind:value={color} />
       </div>
-      {#if session.info?.inviteRequired}
+      {#if (session.info?.inviteRequired && !boardInvite) || invite}
         <label class="field">
           <span class="label">Код приглашения</span>
-          <input class="input" bind:value={invite} placeholder="Спросите у владельца сервера" required />
+          <input class="input" bind:value={invite} placeholder="Спросите у владельца сервера" required={!!session.info?.inviteRequired && !boardInvite} />
         </label>
       {/if}
     {:else}

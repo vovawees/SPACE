@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ServerPanel from "./ServerPanel.svelte";
   import { untrack } from "svelte";
   import Copy from "@lucide/svelte/icons/copy";
   import LogOut from "@lucide/svelte/icons/log-out";
@@ -13,8 +14,8 @@
   import Dialog from "./Dialog.svelte";
   import QR from "./QR.svelte";
 
-  let { onclose, tab: initialTab = "profile" }: { onclose: () => void; tab?: "profile" | "login" | "view" } = $props();
-  let tab = $state<"profile" | "login" | "view">(untrack(() => initialTab));
+  let { onclose, tab: initialTab = "profile" }: { onclose: () => void; tab?: "profile" | "login" | "view" | "server" } = $props();
+  let tab = $state<"profile" | "login" | "view" | "server">(untrack(() => initialTab));
   const me = session.me!;
   let name = $state(me.name);
   let color = $state(me.color);
@@ -101,6 +102,7 @@
     <button class:on={tab === "profile"} onclick={() => (tab = "profile")}>Профиль</button>
     <button class:on={tab === "login"} onclick={() => (tab = "login")}>Вход</button>
     <button class:on={tab === "view"} onclick={() => (tab = "view")}>Вид</button>
+    <button class:on={tab === "server"} onclick={() => (tab = "server")}>Сервер</button>
   </div>
 
   {#if tab === "profile"}
@@ -121,6 +123,8 @@
         <LogOut size={16} /> Выйти на этом устройстве
       </button>
     </div>
+  {:else if tab === "server"}
+    <ServerPanel />
   {:else if tab === "login"}
     <div class="stack">
       <section class="box">

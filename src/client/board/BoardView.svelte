@@ -37,6 +37,7 @@
     if (summary) {
       b.summary = summary;
       b.role = summary.role;
+      if (summary.perms) b.perms = summary.perms;
     }
   });
   provideBoard(b);

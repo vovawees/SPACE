@@ -7,7 +7,7 @@ import { getContext, setContext, untrack } from "svelte";
 import { SvelteSet } from "svelte/reactivity";
 import { IndexeddbPersistence } from "y-indexeddb";
 import * as Y from "yjs";
-import type { BoardSummary, Role, UserRef } from "../../shared/types.ts";
+import type { BoardPerms, BoardSummary, Role, UserRef } from "../../shared/types.ts";
 import { session } from "../lib/session.svelte.ts";
 import { Camera } from "./camera.svelte.ts";
 import type { Pt, Rect } from "./geometry.ts";
@@ -97,6 +97,8 @@ export class Board {
 
   summary = $state<BoardSummary | null>(null);
   role = $state<Role>("editor");
+  /** Права на доске от сервера; без связи — по роли. */
+  perms = $state<BoardPerms>({ edit: true, comment: true, chat: true, invite: true, manage: false, restore: true, copy: true });
   status = $state<Status>("connecting");
   synced = $state(false);
   localReady = $state(false);
@@ -158,7 +160,7 @@ export class Board {
   });
   /** Указатель и жесты; создаётся экраном доски. */
   ix!: Interact;
-  readonly = $derived(this.role === "viewer" || !!this.preview);
+  readonly = $derived(!this.perms.edit || this.role === "viewer" || !!this.preview);
 
   private awarenessTimer: ReturnType<typeof setTimeout> | undefined;
   private pendingAwareness: Record<string, unknown> = {};
@@ -184,7 +186,7 @@ export class Board {
       },
       onSynced: () => (this.synced = true),
       onAuthenticated: ({ scope }) => {
-        if (scope === "readonly") this.role = "viewer";
+        if (scope === "readonly") this.perms = { ...this.perms, edit: false };
       },
       onAuthenticationFailed: ({ reason }) => (this.denied = reason),
       onUnsyncedChanges: ({ number }) => (this.unsynced = number),

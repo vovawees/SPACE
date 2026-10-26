@@ -1,6 +1,8 @@
 /* Комментарии: булавка на доске и обсуждение рядом с ней.
    Каждое сообщение — отдельное поле m:<id> узла, поэтому одновременные
    ответы разных людей не затирают друг друга. */
+import { api } from "../../lib/api.ts";
+import { toasts } from "../../lib/toast.svelte.ts";
 import type { Board } from "../board.svelte.ts";
 import type { Pt } from "../geometry.ts";
 import type { NodeData, NodeProps } from "../model.ts";
@@ -39,7 +41,13 @@ export function addComment(b: Board, at: Pt, parent?: string): string {
 
 export function postComment(b: Board, id: string, text: string): boolean {
   const x = text.trim().slice(0, 4000);
-  if (!x || b.readonly) return false;
+  if (!x) return false;
+  if (b.readonly) {
+    // комментатор: сообщение добавляет сервер
+    if (!b.perms.comment || b.preview) return false;
+    api.post(`/api/boards/${b.id}/comments`, { node: id, text: x }).catch((e) => toasts.error(e));
+    return true;
+  }
   const me = b.me;
   const t = Date.now();
   const key = `m:${t.toString(36)}${Math.random().toString(36).slice(2, 6)}`;
@@ -49,4 +57,11 @@ export function postComment(b: Board, id: string, text: string): boolean {
 
 export function dropComment(b: Board, id: string, key: string) {
   b.store.update(id, { [key]: undefined } as Partial<NodeData>);
+}
+
+/** Комментатор ставит новую булавку через сервер (документ у него только для чтения). */
+export function addCommentRemote(b: Board, at: Pt, text: string): void {
+  const x = text.trim().slice(0, 4000);
+  if (!x) return;
+  api.post(`/api/boards/${b.id}/comments`, { x: Math.round(at.x), y: Math.round(at.y), text: x }).catch((e) => toasts.error(e));
 }

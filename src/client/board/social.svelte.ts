@@ -3,6 +3,7 @@
      не попадает в отмену и в копии доски;
    • сообщение у курсора, реакции и «позвать всех» — через присутствие
      (awareness): мгновенно и без следа в документе. */
+import { api } from "../lib/api.ts";
 import { nanoid } from "nanoid";
 import * as Y from "yjs";
 import type { UserRef } from "../../shared/types.ts";
@@ -115,12 +116,18 @@ export class Social {
   }
 
   get canWrite(): boolean {
-    return this.b.role !== "viewer";
+    return this.b.perms.chat && !this.b.preview;
   }
 
   send(text: string, refs: string[] = []): boolean {
     const t = text.trim().slice(0, 2000);
     if (!t || !this.canWrite) return false;
+    // только чтение (комментатор, замороженная доска) — сообщение пишет сервер
+    if (this.b.readonly) {
+      api.post(`/api/boards/${this.b.id}/chat`, { text: t, refs: refs.length ? refs.slice(0, 40) : undefined }).catch((e) => toasts.error(e));
+      this.markRead();
+      return true;
+    }
     const me = this.b.me;
     const msg: ChatMsg = { id: nanoid(10), uid: me.id, name: me.name, color: me.color, text: t, t: Date.now() };
     if (refs.length) msg.refs = refs.slice(0, 40);

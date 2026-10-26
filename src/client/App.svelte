@@ -23,7 +23,7 @@
     <div class="boot"><div class="spin"></div></div>
   {:then mod}
     {#key router.route.id}
-      <mod.default id={router.route.id} focus={router.route.focus} />
+      <mod.default id={router.route.id} focus={router.route.focus} invite={router.route.invite} />
     {/key}
   {/await}
 {:else if router.route.name === "home"}

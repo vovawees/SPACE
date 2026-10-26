@@ -73,8 +73,10 @@
     input.style.height = Math.min(140, input.scrollHeight) + "px";
   }
 
+  const canReply = $derived(!b.readonly || (b.perms.comment && !b.preview));
+
   function focusInput(el: HTMLTextAreaElement) {
-    if (b.readonly) return;
+    if (!canReply) return;
     requestAnimationFrame(() => el.focus({ preventScroll: true }));
   }
 
@@ -126,7 +128,7 @@
         {/each}
       </div>
     {/if}
-    {#if !b.readonly}
+    {#if canReply}
       <form class="reply" onsubmit={(e) => (e.preventDefault(), send())}>
         <textarea
           bind:this={input}

@@ -13,7 +13,7 @@
   import "../styles/chrome.css";
   import "../styles/nodes.css";
 
-  let { id, focus }: { id: string; focus?: string } = $props();
+  let { id, focus, invite }: { id: string; focus?: string; invite?: string } = $props();
 
   let phase = $state<"loading" | "ready" | "missing" | "denied">("loading");
   let summary = $state<BoardSummary | null>(null);
@@ -21,8 +21,15 @@
 
   onMount(() => {
     let alive = true;
-    api
-      .get<BoardSummary>(`/api/boards/${id}`)
+    // приглашение ?k=… — сначала вступаем с его ролью, потом убираем код из адреса
+    const load = invite
+      ? api.post<BoardSummary>(`/api/boards/${id}/join`, { token: invite }).finally(() => {
+          const u = new URL(location.href);
+          u.searchParams.delete("k");
+          history.replaceState(null, "", u.pathname + u.search);
+        })
+      : api.get<BoardSummary>(`/api/boards/${id}`);
+    load
       .then((s) => {
         if (!alive) return;
         summary = s;
@@ -31,7 +38,7 @@
       .catch((e: unknown) => {
         if (!alive) return;
         if (e instanceof ApiError && e.status === 404) phase = "missing";
-        else if (e instanceof ApiError && (e.status === 403 || e.status === 401)) {
+        else if (e instanceof ApiError && (e.status === 403 || e.status === 401 || e.status === 410)) {
           message = e.message;
           phase = "denied";
         } else phase = "ready"; // нет связи — работаем с локальной копией

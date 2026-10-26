@@ -59,7 +59,8 @@ import Ungroup from "@lucide/svelte/icons/ungroup";
 import { session } from "../lib/session.svelte.ts";
 import { BACKDROPS, backdropGlyph } from "../lib/look.svelte.ts";
 import { EMOJI_GROUPS } from "./library.ts";
-import { addComment } from "./nodes/comment.ts";
+import { addComment, addCommentRemote } from "./nodes/comment.ts";
+import { promptText } from "../ui/confirm.svelte.ts";
 import { audioItems, counterItems, diceItems, pollItems, progressItems, tableItems, taskItems, timerItems } from "./nodes/actions.ts";
 import { toasts } from "../lib/toast.svelte.ts";
 import { copyText, download } from "../lib/util.ts";
@@ -518,6 +519,14 @@ export function canvasMenu(b: Board, ix: Interact, at: Pt): MenuEntry[] {
       },
     },
     !ro && { label: "Комментарий", icon: MessageSquarePlus, run: () => addComment(b, at) },
+    ro && b.perms.comment && !b.preview && {
+      label: "Комментарий…",
+      icon: MessageSquarePlus,
+      run: async () => {
+        const text = await promptText({ title: "Комментарий", ok: "Отправить", input: { placeholder: "Что хотите сказать?", multiline: true } });
+        if (text?.trim()) addCommentRemote(b, at, text);
+      },
+    },
     !ro && {
       label: "Загрузить файлы…",
       icon: Upload,

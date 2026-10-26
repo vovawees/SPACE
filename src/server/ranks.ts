@@ -178,7 +178,7 @@ export function useInvite(code: string): void {
 }
 
 /** Ранг для нового аккаунта или ошибка, если регистрация закрыта. */
-export function rankForNewUser(invite: string | undefined): Rank {
+export function rankForNewUser(invite: string | undefined, boardInvite?: { board: string; token: string }): Rank {
   const firstEver = !(q("SELECT 1 FROM users LIMIT 1").get() as unknown);
   if (firstEver) return "owner";
   const fromInvite = peekInvite(invite);
@@ -186,6 +186,13 @@ export function rankForNewUser(invite: string | undefined): Rank {
   if (fromInvite) return fromInvite;
   if (invite?.trim()) throw new HttpError(403, "invite_invalid", "Код приглашения неверный, истёк или уже использован");
   if (s.registration === "closed") throw new HttpError(403, "registration_closed", "Регистрация на этом сервере закрыта — нужен код приглашения");
+  // живое приглашение на доску пускает на сервер гостем
+  if (boardInvite && s.registration === "invite") {
+    const row = q("SELECT uses, max_uses, expires_at FROM board_links WHERE id = ? AND board_id = ?").get(boardInvite.token, boardInvite.board) as
+      | { uses: number; max_uses: number | null; expires_at: number | null }
+      | undefined;
+    if (row && !(row.expires_at && row.expires_at < now()) && !(row.max_uses && row.uses >= row.max_uses)) return "guest";
+  }
   if (s.registration === "invite") throw new HttpError(403, "invite_required", "Нужен код приглашения");
   return s.defaultRank;
 }

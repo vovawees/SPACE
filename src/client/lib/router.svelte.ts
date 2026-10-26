@@ -1,7 +1,7 @@
 /* Маленький роутер на History API: / , /b/:id , /login/:token */
 export type Route =
   | { name: "home" }
-  | { name: "board"; id: string; focus?: string }
+  | { name: "board"; id: string; focus?: string; invite?: string }
   | { name: "login-link"; token: string }
   | { name: "not-found" };
 
@@ -10,8 +10,10 @@ function parse(path: string, search: string): Route {
   if (p === "/") return { name: "home" };
   let m = /^\/b\/([a-z0-9]{6,32})$/.exec(p);
   if (m) {
-    const focus = new URLSearchParams(search).get("n") || undefined;
-    return { name: "board", id: m[1]!, focus };
+    const qs = new URLSearchParams(search);
+    const focus = qs.get("n") || undefined;
+    const invite = qs.get("k") || undefined;
+    return { name: "board", id: m[1]!, focus, invite };
   }
   m = /^\/login\/([\w-]{10,200})$/.exec(p);
   if (m) return { name: "login-link", token: m[1]! };

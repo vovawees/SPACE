@@ -145,9 +145,14 @@ app.get("/api/me", (c) => {
 app.post("/api/auth/guest", async (c) => {
   const data = await body(
     c,
-    z.object({ name: nameSchema, color: colorSchema, invite: z.string().max(200).optional() }),
+    z.object({
+      name: nameSchema,
+      color: colorSchema,
+      invite: z.string().max(200).optional(),
+      boardInvite: z.object({ board: z.string().max(40), token: z.string().max(100) }).optional(),
+    }),
   );
-  const rank = rankForNewUser(data.invite);
+  const rank = rankForNewUser(data.invite, data.boardInvite);
   if (!guestLimiter(clientIp(c))) throw tooMany();
   const user = createUser(data.name, data.color, rank);
   if (data.invite?.trim()) useInvite(data.invite);
