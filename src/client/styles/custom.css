@@ -346,3 +346,18 @@
     animation-iteration-count: 1 !important;
   }
 }
+
+/* неподвижный GIF издали — маленькая подпись */
+.media .gif-badge {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: rgb(0 0 0 / 0.55);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+}

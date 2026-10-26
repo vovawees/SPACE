@@ -1,6 +1,7 @@
 /* Клавиатура. Сочетания читаются по физической клавише (e.code), а не по
    символу: на русской раскладке Ctrl+Z приходит как «я», и без этого
    отмена и все горячие клавиши молча не работали бы. */
+import { copyStyle, pasteStyle } from "./style.ts";
 import { RUN_LANGS, runs } from "./run.svelte.ts";
 import { session } from "../lib/session.svelte.ts";
 import { toasts } from "../lib/toast.svelte.ts";
@@ -84,6 +85,16 @@ export function attachKeys(b: Board): () => void {
       else if (b.following !== null) b.following = null;
       else if (sel.size) sel.clear();
       else if (b.ui.chat) b.ui.chat = false;
+      return;
+    }
+
+    if (mod && e.altKey && (code === "KeyC" || code === "KeyV")) {
+      // оформление: Ctrl+Alt+C — взять, Ctrl+Alt+V — применить к выделенному
+      e.preventDefault();
+      const list = st.selected();
+      if (code === "KeyC") {
+        if (list[0]) copyStyle(list[0]);
+      } else if (!b.readonly && list.length) pasteStyle(b, list.map((v) => v.id));
       return;
     }
 

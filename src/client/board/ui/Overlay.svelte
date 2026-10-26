@@ -349,6 +349,12 @@
     <div class="marquee" style:transform="translate({marquee.x}px, {marquee.y}px)" style:width="{marquee.w}px" style:height="{marquee.h}px"></div>
   {/if}
 
+  {#if ix.pressRing}
+    {#key ix.pressRing.n}
+      <div class="press-ring" style:transform="translate({ix.pressRing.x}px, {ix.pressRing.y}px)" aria-hidden="true"></div>
+    {/key}
+  {/if}
+
   {#if guides.length}
     <svg class="guides" width={cam.vw} height={cam.vh}>
       {#each guides as g, i (i)}
@@ -785,6 +791,29 @@
     opacity: 1;
     background: var(--accent);
   }
+  /* долгое нажатие пальцем на пустом месте: «теперь ведите — выделение» */
+  .press-ring {
+    position: absolute;
+    left: -28px;
+    top: -28px;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    border: 2px solid var(--accent);
+    background: color-mix(in oklab, var(--accent) 12%, transparent);
+    pointer-events: none;
+    animation: press-ring 0.5s var(--ease-out) forwards;
+  }
+  @keyframes press-ring {
+    from {
+      scale: 0.3;
+      opacity: 1;
+    }
+    to {
+      scale: 1.2;
+      opacity: 0;
+    }
+  }
   .marquee {
     position: absolute;
     left: 0;
@@ -890,5 +919,57 @@
     font-size: 12px;
     font-weight: 600;
     height: fit-content;
+  }
+  /* пальцем: ручки крупнее, а зона касания — ещё больше видимой */
+  @media (pointer: coarse) {
+    .corner {
+      width: 15px;
+      height: 15px;
+      margin: -7.5px 0 0 -7.5px;
+      border-radius: 50%;
+    }
+    .corner::before,
+    .pt::before,
+    .rot::before {
+      content: "";
+      position: absolute;
+      inset: -13px;
+      border-radius: 50%;
+    }
+    .e-n,
+    .e-s {
+      height: 22px;
+    }
+    .e-n {
+      top: -11px;
+    }
+    .e-s {
+      bottom: -11px;
+    }
+    .e-e,
+    .e-w {
+      width: 22px;
+    }
+    .e-e {
+      right: -11px;
+    }
+    .e-w {
+      left: -11px;
+    }
+    .pt {
+      width: 14px;
+      height: 14px;
+      margin: -7px 0 0 -7px;
+    }
+    .pt.end {
+      width: 17px;
+      height: 17px;
+      margin: -8.5px 0 0 -8.5px;
+    }
+    .rot {
+      width: 28px;
+      height: 28px;
+      margin: -38px 0 0 8px;
+    }
   }
 </style>

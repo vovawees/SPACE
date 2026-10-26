@@ -243,7 +243,8 @@ async function addFile(b: Board, f: File, at: Pt): Promise<string | null> {
     const id = s.create({ type: "image", x: Math.round(at.x - size.w / 2), y: Math.round(at.y - size.h / 2), ...size, natW: w, natH: h, name, mime: f.type, bytes: f.size, pending: true });
     keepLocal(id, f);
     s.reparent([id]);
-    const thumbP = bitmap && Math.max(w, h) > 700 && f.type !== "image/gif" ? thumbnail(bitmap, w, h).then((t) => (t ? upload(t, "preview.webp") : null)) : Promise.resolve(null);
+    // у GIF превью — неподвижный первый кадр: издали анимация не нужна и дорога
+    const thumbP = bitmap && (Math.max(w, h) > 700 || f.type === "image/gif") ? thumbnail(bitmap, w, h).then((t) => (t ? upload(t, "preview.webp") : null)) : Promise.resolve(null);
     const [info, thumb] = await Promise.all([upload(f, name), thumbP.catch(() => null)]);
     bitmap?.close();
     s.update(id, { src: info.hash, preview: thumb?.hash, pending: undefined }, QUIET);

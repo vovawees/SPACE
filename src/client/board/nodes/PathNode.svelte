@@ -6,6 +6,7 @@
   import { dashArray, strokePx } from "../shapes.ts";
   import EditorHost from "../ui/EditorHost.svelte";
   import { markdownOf } from "./cache.ts";
+  import { ruleSummary } from "../logic.svelte.ts";
   import type { NodeCompProps } from "./types.ts";
 
   let { v, sel, editing }: NodeCompProps = $props();
@@ -18,6 +19,10 @@
     return { x: r.x - pad, y: r.y - pad, w: r.w + pad * 2, h: r.h + pad * 2 };
   });
   const html = $derived(editing ? "" : markdownOf(v));
+  // стрелка с логикой: бегущий пунктир, значок правила и вспышка сигнала
+  const lg = $derived(!!v.props.lg);
+  const badge = $derived(lg && !html && !editing ? ruleSummary(b.view, v) : "");
+  const pulse = $derived(lg ? b.logic.pulses.get(v.id) : undefined);
 </script>
 
 {#if geo.track.length >= 2}
@@ -34,11 +39,17 @@
     {#if sel}<path class="glow" d={geo.d} />{/if}
     <path class="hit" d={geo.d} />
     <path class="line" d={geo.d} style:stroke-width="{sw}px" stroke-dasharray={dashArray(v.props.dash, sw)} />
+    {#if lg}
+      <path class="flow" d={geo.d} style:stroke-width="{Math.max(1.5, sw * 0.55)}px" />
+      {#if pulse}{#key pulse}<path class="spark" d={geo.d} pathLength="100" style:stroke-width="{sw + 3}px" />{/key}{/if}
+    {/if}
     {#each geo.heads as h, i (i)}
       {#if h}<path class="head {h.style}" d={h.d} style:stroke-width="{sw}px" />{/if}
     {/each}
   </svg>
-  {#if editing || html}
+  {#if badge}
+    <div class="path-label s path-logic" class:pulsed={!!pulse} data-path-label={v.id} style:transform="translate({geo.label.x}px, {geo.label.y}px)">{badge}</div>
+  {:else if editing || html}
     <div class="path-label {v.props.size ?? 's'}" class:editing data-path-label={v.id} style:transform="translate({geo.label.x}px, {geo.label.y}px)">
       {#if editing}
         <EditorHost {v} mode="markdown" placeholder="Подпись" />

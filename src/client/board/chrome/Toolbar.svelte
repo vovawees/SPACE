@@ -182,7 +182,7 @@
   const weightPx = (s: StrokeSize) => Math.max(2, Math.min(9, STROKE_PX[s] * (b.tool === "draw" || b.tool === "pen" ? 1.15 : 1)));
 </script>
 
-<div class="dock">
+<div class="dock" class:chat-open={b.ui.chat || !!b.ui.style || !!b.ui.logic}>
   {#if showStyle}
     <div class="style panel" role="toolbar" aria-label="Стиль">
       <div class="colors">
@@ -348,6 +348,9 @@
     gap: 8px;
     pointer-events: none;
     max-width: calc(100vw - 16px);
+    transition:
+      opacity 160ms var(--ease-out),
+      translate 160ms var(--ease-out);
   }
   .tools {
     display: flex;
@@ -426,6 +429,14 @@
   .shape-ic {
     display: grid;
     place-items: center;
+  }
+  /* на телефоне чат и панели — листом снизу; панель инструментов уходит */
+  @media (max-width: 760px) {
+    .dock.chat-open {
+      opacity: 0;
+      pointer-events: none;
+      translate: 0 16px;
+    }
   }
   @media (max-width: 640px) {
     .dock {

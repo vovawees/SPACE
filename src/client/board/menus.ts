@@ -56,6 +56,10 @@ import Type from "@lucide/svelte/icons/type";
 import Upload from "@lucide/svelte/icons/upload";
 import X from "@lucide/svelte/icons/x";
 import Ungroup from "@lucide/svelte/icons/ungroup";
+import Paintbrush from "@lucide/svelte/icons/paintbrush";
+import Zap from "@lucide/svelte/icons/zap";
+import { canLogic } from "./logic.svelte.ts";
+import { copyStyle, copiedStyle, hasStyle, pasteStyle, resetStyle } from "./style.ts";
 import { session } from "../lib/session.svelte.ts";
 import { BACKDROPS, backdropGlyph } from "../lib/look.svelte.ts";
 import { EMOJI_GROUPS } from "./library.ts";
@@ -235,6 +239,15 @@ export function fontItems(views: NodeView[], set: (p: Partial<NodeData>) => void
   return FONTS.map((f) => ({ label: f.label, checked: cur === f.id, run: () => set({ font: f.id === "sans" ? undefined : f.id }) }));
 }
 
+/** Где открыть панель оформления или логики: справа от выделения. */
+export function panelAt(b: Board): { x: number; y: number } {
+  const cam = b.camera;
+  const r = b.view.boundsOfIds(b.view.selection.ids);
+  if (!r) return { x: Math.max(8, cam.vw / 2 - 150), y: 80 };
+  const c = cam.toScreen(r.x + r.w, r.y);
+  return { x: Math.max(8, Math.min(cam.vw - 330, c.x + 14)), y: Math.max(64, Math.min(cam.vh - 260, c.y - 8)) };
+}
+
 export function nodeMenu(b: Board, ix: Interact): MenuEntry[] {
   const s = b.view;
   const views = s.selected();
@@ -269,6 +282,18 @@ export function nodeMenu(b: Board, ix: Interact): MenuEntry[] {
       pick: (c: string) => set({ color: c as NodeData["color"] }),
     },
     !ro && views.length > 0 && { label: "Прозрачность", icon: Blend, items: opacityItems(views, set) },
+    !ro && views.length > 0 && { label: "Оформление…", icon: Paintbrush, run: () => ((b.ui.logic = null), (b.ui.style = panelAt(b))) },
+    !ro &&
+      views.length > 0 && {
+        label: "Стиль",
+        icon: Paintbrush,
+        items: [
+          { label: "Копировать оформление", icon: Copy, keys: "Mod+Alt+C", disabled: !one, run: () => one && copyStyle(one) },
+          { label: "Вставить оформление", icon: ClipboardPaste, keys: "Mod+Alt+V", disabled: !copiedStyle(), run: () => pasteStyle(b, ids) },
+          { label: "Сбросить оформление", icon: RotateCcw, disabled: !views.some((v) => hasStyle(v.props)), run: () => resetStyle(b, ids) },
+        ],
+      },
+    !ro && one?.type === "path" && canLogic(s, one) && { label: one.props.lg ? "Логика стрелки…" : "Добавить логику…", icon: Zap, run: () => ((b.ui.style = null), (b.ui.logic = { ...panelAt(b), id: one.id })) },
     !ro && views.some((v) => FONT_TYPES.has(v.type)) && { label: "Шрифт", icon: CaseSensitive, items: fontItems(views, set) },
     !ro && {
       label: "Порядок",

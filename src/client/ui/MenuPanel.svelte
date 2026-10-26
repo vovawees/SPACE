@@ -406,4 +406,12 @@
   .emo.on {
     background: var(--accent-soft);
   }
+  /* пальцем — пункты крупнее */
+  @media (pointer: coarse) {
+    .item {
+      height: 42px;
+      font-size: 15px;
+      gap: 11px;
+    }
+  }
 </style>

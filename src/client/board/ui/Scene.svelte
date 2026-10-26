@@ -52,7 +52,7 @@
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     const view = { x: cam.x, y: cam.y, z: cam.z, w, h };
-    untrack(() => drawScene(ctx, s, view, { dpr, onImage: bump }));
+    untrack(() => drawScene(ctx, s, view, { dpr, onImage: bump, readonly: b.readonly }));
     return () => cancelAnimationFrame(raf);
   });
 </script>

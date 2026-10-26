@@ -192,6 +192,8 @@ export interface SceneOptions {
   background?: boolean;
   /** Узлы, которые не рисовать (например, их сейчас тащат). */
   skip?: ReadonlySet<string>;
+  /** Только просмотр: спрятанное логикой не рисовать (редакторам — призраком). */
+  readonly?: boolean;
 }
 
 /** Текущий масштаб отрисовки: мелкое на экране рисуется дешевле (без скруглений). */
@@ -221,6 +223,7 @@ export function drawScene(ctx: CanvasRenderingContext2D, s: BoardStore, view: Sc
   // рамки — снизу
   for (const v of order) {
     if (v.type !== "frame") continue;
+    if (v.props.hid && opts.readonly) continue;
     const r = v.rect;
     if (!intersects(r, world)) continue;
     const c = palKey(pal, v.props.color);
@@ -235,6 +238,7 @@ export function drawScene(ctx: CanvasRenderingContext2D, s: BoardStore, view: Sc
 
   for (const v of order) {
     if (v.type === "frame" || opts.skip?.has(v.id)) continue;
+    if (v.props.hid && opts.readonly) continue;
     const b = v.type === "path" ? s.connector(v).paint : aabb(v.rect, v.r);
     if (!intersects(b, world)) continue;
     ctx.globalAlpha = alphaOf(v);
@@ -294,7 +298,15 @@ function bars(ctx: CanvasRenderingContext2D, lines: number[], x: number, y: numb
   ctx.fill();
 }
 
-const alphaOf = (v: NodeView) => (typeof v.props.opacity === "number" ? Math.max(0.1, Math.min(1, v.props.opacity)) : 1);
+const alphaOf = (v: NodeView) => (typeof v.props.opacity === "number" ? Math.max(0.1, Math.min(1, v.props.opacity)) : 1) * (v.props.hid ? 0.35 : 1);
+
+/** Своя заливка из «Оформления»: цвет (у градиента — первый); null — нет своей. */
+function fillOf(pal: Palette, v: NodeView): string | null {
+  const fc = v.props.fc;
+  if (!fc) return null;
+  if (fc === "transparent") return "rgb(0 0 0 / 0)";
+  return pal.colors[palKey(pal, fc)] ?? null;
+}
 
 function drawNode(ctx: CanvasRenderingContext2D, s: BoardStore, v: NodeView, pal: Palette, z: number, opts: SceneOptions) {
   const A = ctx.globalAlpha;
@@ -307,7 +319,7 @@ function drawNode(ctx: CanvasRenderingContext2D, s: BoardStore, v: NodeView, pal
     case "file":
     case "shelf": {
       rr(ctx, r.x, r.y, r.w, r.h, 13);
-      ctx.fillStyle = v.type === "note" ? pal.tinted[c] : pal.card;
+      ctx.fillStyle = fillOf(pal, v) ?? (v.type === "note" ? pal.tinted[c] : pal.card);
       ctx.fill();
       ctx.lineWidth = px;
       ctx.strokeStyle = v.type === "note" ? pal.tintedLine[c] : pal.line;
@@ -322,7 +334,7 @@ function drawNode(ctx: CanvasRenderingContext2D, s: BoardStore, v: NodeView, pal
           ctx.save();
           rr(ctx, r.x, r.y, r.w, r.h, 13);
           ctx.clip();
-          ctx.drawImage(img, r.x, r.y, r.w, ih);
+          ctx.drawImage(mipOf(v.props.image!, img, r.w * z * (opts.dpr ?? 1), opts.onImage), r.x, r.y, r.w, ih);
           ctx.restore();
           top += ih;
         }
@@ -339,7 +351,7 @@ function drawNode(ctx: CanvasRenderingContext2D, s: BoardStore, v: NodeView, pal
     }
     case "code": {
       rr(ctx, r.x, r.y, r.w, r.h, 13);
-      ctx.fillStyle = pal.codeBg;
+      ctx.fillStyle = fillOf(pal, v) ?? pal.codeBg;
       ctx.fill();
       ctx.lineWidth = px;
       ctx.strokeStyle = pal.line;
@@ -360,7 +372,7 @@ function drawNode(ctx: CanvasRenderingContext2D, s: BoardStore, v: NodeView, pal
       const p = v.props;
       const url = v.type === "image" ? fileUrl(p.preview || p.src) : p.image || (p.preview ? fileUrl(p.preview) : "");
       const img = url ? sceneImage(url, opts.onImage) : null;
-      if (img) ctx.drawImage(img, r.x, r.y, r.w, r.h);
+      if (img) ctx.drawImage(mipOf(url, img, Math.max(r.w, r.h) * z * (opts.dpr ?? 1), opts.onImage), r.x, r.y, r.w, r.h);
       else {
         ctx.fillStyle = pal.surface;
         ctx.fillRect(r.x, r.y, r.w, r.h);
@@ -384,12 +396,13 @@ function drawNode(ctx: CanvasRenderingContext2D, s: BoardStore, v: NodeView, pal
       const p = v.props;
       const sw = strokePx(p.stroke);
       const path = new Path2D(shapeD(p.kind ?? "rect", r.x + sw / 2, r.y + sw / 2, r.w - sw, r.h - sw, p.pts));
-      if (p.fill !== "none") {
-        ctx.fillStyle = p.fill === "solid" ? pal.colors[c] : pal.shapeFill[c];
+      const own = fillOf(pal, v);
+      if (own || p.fill !== "none") {
+        ctx.fillStyle = own ?? (p.fill === "solid" ? pal.colors[c] : pal.shapeFill[c]);
         ctx.fill(path);
       }
-      ctx.lineWidth = Math.max(sw, px);
-      ctx.strokeStyle = pal.colors[c];
+      ctx.lineWidth = Math.max(typeof p.bw === "number" ? p.bw : sw, px);
+      ctx.strokeStyle = p.bc ? (pal.colors[palKey(pal, p.bc)] ?? pal.colors[c]) : pal.colors[c];
       ctx.lineJoin = "round";
       ctx.stroke(path);
       break;
@@ -472,6 +485,21 @@ function drawNode(ctx: CanvasRenderingContext2D, s: BoardStore, v: NodeView, pal
       ctx.stroke();
       break;
     }
+    case "button":
+    case "switch":
+    case "slider":
+    case "rating":
+    case "clock":
+    case "countdown":
+    case "chart":
+    case "qr":
+    case "wheel":
+    case "status":
+    case "tracker":
+    case "calc":
+    case "gate":
+      drawWidget(ctx, v, pal, z, c);
+      break;
     case "task":
     case "poll":
     case "table":
@@ -482,7 +510,7 @@ function drawNode(ctx: CanvasRenderingContext2D, s: BoardStore, v: NodeView, pal
     case "progress": {
       rr(ctx, r.x, r.y, r.w, r.h, 13);
       const tinted = v.type === "task" || v.type === "counter" || v.type === "dice" || v.type === "progress";
-      ctx.fillStyle = tinted ? pal.tinted[c] : pal.card;
+      ctx.fillStyle = fillOf(pal, v) ?? (tinted ? pal.tinted[c] : pal.card);
       ctx.fill();
       ctx.lineWidth = px;
       ctx.strokeStyle = tinted ? pal.tintedLine[c] : pal.line;
@@ -612,6 +640,261 @@ function drawNode(ctx: CanvasRenderingContext2D, s: BoardStore, v: NodeView, pal
   }
 }
 
+/* ------------------------------ виджеты ------------------------------ */
+
+function drawWidget(ctx: CanvasRenderingContext2D, v: NodeView, pal: Palette, z: number, c: string) {
+  const A = ctx.globalAlpha;
+  const r = v.rect;
+  const p = v.props;
+  const px = 1 / z;
+  const accent = c === "default" ? pal.accent : pal.colors[c]!;
+  const round = v.type === "gate" || v.type === "wheel";
+  if (!round) {
+    rr(ctx, r.x, r.y, r.w, r.h, v.type === "button" ? Math.min(r.h / 2, 18) : 14);
+    ctx.fillStyle = fillOf(pal, v) ?? (v.type === "qr" ? "#ffffff" : c === "default" ? pal.card : pal.tinted[c]!);
+    ctx.fill();
+    ctx.lineWidth = px;
+    ctx.strokeStyle = c === "default" ? pal.line : pal.tintedLine[c]!;
+    ctx.stroke();
+  }
+  if (z * 14 < 1.2) return;
+  const cx = r.x + r.w / 2;
+  const cy = r.y + r.h / 2;
+  switch (v.type) {
+    case "button": {
+      rr(ctx, r.x + 10, r.y + 10, r.w - 20, r.h - 20, Math.min((r.h - 20) / 2, 14));
+      ctx.fillStyle = p.bv === "outline" ? pal.surface : accent;
+      ctx.globalAlpha = A * (p.bv === "soft" ? 0.4 : 1);
+      ctx.fill();
+      ctx.globalAlpha = A;
+      break;
+    }
+    case "switch": {
+      const tw = Math.min(56, r.w * 0.3);
+      const th = Math.min(30, r.h * 0.45);
+      const tx = r.x + r.w - tw - 16;
+      rr(ctx, tx, cy - th / 2, tw, th, th / 2);
+      ctx.fillStyle = p.on ? pal.colors.green! : pal.surface;
+      ctx.fill();
+      ctx.fillStyle = pal.card;
+      ctx.beginPath();
+      ctx.arc(p.on ? tx + tw - th / 2 : tx + th / 2, cy, th * 0.38, 0, Math.PI * 2);
+      ctx.fill();
+      bars(ctx, [14], r.x + 16, cy - 12, r.w - tw - 48, 24, r.y + r.h, pal.ink4);
+      break;
+    }
+    case "slider":
+    case "countdown":
+    case "calc": {
+      bars(ctx, [12], r.x + 16, r.y + 12, r.w * 0.5, 22, r.y + r.h, pal.ink4);
+      if (v.type === "slider") {
+        const lo = p.min ?? 0;
+        const hi = p.max ?? 100;
+        const k = hi > lo ? Math.max(0, Math.min(1, ((p.sv ?? 0) - lo) / (hi - lo))) : 0;
+        const y = r.y + r.h * 0.68;
+        rr(ctx, r.x + 16, y - 4, r.w - 32, 8, 4);
+        ctx.fillStyle = pal.surface;
+        ctx.fill();
+        rr(ctx, r.x + 16, y - 4, Math.max(8, (r.w - 32) * k), 8, 4);
+        ctx.fillStyle = accent;
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(r.x + 16 + (r.w - 32) * k, y, 9, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.globalAlpha = A * 0.7;
+        bars(ctx, [v.type === "calc" ? 5 : 9], r.x + 16, r.y + r.h * 0.45, r.w - 32, Math.min(46, r.h * 0.4), r.y + r.h, accent);
+        ctx.globalAlpha = A;
+      }
+      break;
+    }
+    case "rating": {
+      const n = Math.max(1, Math.min(10, p.max ?? 5));
+      const sz = Math.min((r.w - 32) / n - 6, r.h * 0.3);
+      let sum = 0;
+      let cnt = 0;
+      for (const [k, x] of Object.entries(p as Record<string, unknown>)) if (k.startsWith("rt:") && typeof x === "number") (sum += x), cnt++;
+      const avg = cnt ? sum / cnt : 0;
+      for (let i = 0; i < n; i++) {
+        ctx.fillStyle = i < Math.round(avg) ? pal.colors.yellow! : pal.surface;
+        ctx.beginPath();
+        ctx.arc(r.x + 16 + sz / 2 + i * (sz + 6), r.y + r.h * 0.62, sz / 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      bars(ctx, [12], r.x + 16, r.y + 12, r.w * 0.5, 22, r.y + r.h, pal.ink4);
+      break;
+    }
+    case "clock": {
+      const R = Math.min(r.w, r.h) * 0.34;
+      ctx.strokeStyle = pal.ink4;
+      ctx.lineWidth = Math.max(px, R * 0.06);
+      ctx.beginPath();
+      ctx.arc(cx, cy + 6, R, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(cx, cy + 6);
+      ctx.lineTo(cx - R * 0.45, cy + 6 - R * 0.3);
+      ctx.moveTo(cx, cy + 6);
+      ctx.lineTo(cx + R * 0.55, cy + 6 - R * 0.45);
+      ctx.strokeStyle = accent;
+      ctx.stroke();
+      break;
+    }
+    case "chart": {
+      const data = (p.data ?? []).slice(0, 12);
+      const n = Math.max(3, data.length);
+      if (p.ct === "pie" || p.ct === "donut") {
+        const R = Math.min(r.w, r.h) * 0.36;
+        const tot = data.reduce((a, d) => a + Math.max(0, d.v), 0) || 1;
+        let a0 = -Math.PI / 2;
+        (data.length ? data : [{ l: "", v: 1 }]).forEach((d, i) => {
+          const a1 = a0 + (Math.max(0, d.v) / tot) * Math.PI * 2;
+          ctx.fillStyle = d.c ? (pal.colors[palKey(pal, d.c)] ?? accent) : pal.colors[COLORS[(i % 8) + 2]!]!;
+          ctx.beginPath();
+          ctx.moveTo(cx, cy);
+          ctx.arc(cx, cy, R, a0, a1);
+          ctx.fill();
+          a0 = a1;
+        });
+        if (p.ct === "donut") {
+          ctx.fillStyle = fillOf(pal, v) ?? pal.card;
+          ctx.beginPath();
+          ctx.arc(cx, cy, R * 0.55, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        break;
+      }
+      const max = Math.max(1, ...data.map((d) => d.v));
+      const bw = (r.w - 32) / n;
+      ctx.fillStyle = accent;
+      ctx.beginPath();
+      for (let i = 0; i < n; i++) {
+        const k = data[i] ? Math.max(0.04, data[i]!.v / max) : 0.3 + ((i * 37) % 50) / 100;
+        const h = (r.h - 56) * k;
+        ctx.rect(r.x + 16 + i * bw + bw * 0.15, r.y + r.h - 16 - h, bw * 0.7, h);
+      }
+      ctx.fill();
+      break;
+    }
+    case "qr": {
+      // узор вместо настоящего кода — издали он всё равно не читается
+      const m = Math.min(r.w, r.h) - 24;
+      const cell = m / 9;
+      const x0 = cx - m / 2;
+      const y0 = cy - m / 2;
+      let seed = 0;
+      for (const ch of v.id) seed = (seed * 31 + ch.charCodeAt(0)) >>> 0;
+      ctx.fillStyle = "#111111";
+      ctx.beginPath();
+      for (let i = 0; i < 9; i++)
+        for (let j = 0; j < 9; j++) {
+          const corner = (i < 3 && j < 3) || (i > 5 && j < 3) || (i < 3 && j > 5);
+          seed = (seed * 1103515245 + 12345) >>> 0;
+          if (corner ? !(i % 6 === 1 && j % 6 === 1) : seed % 3 === 0) ctx.rect(x0 + i * cell, y0 + j * cell, cell, cell);
+        }
+      ctx.fill();
+      break;
+    }
+    case "wheel": {
+      const R = Math.min(r.w, r.h) / 2 - 4;
+      const n = Math.max(2, Math.min(24, (p.opts ?? []).length || 6));
+      for (let i = 0; i < n; i++) {
+        ctx.fillStyle = pal.colors[COLORS[(i % 8) + 2]!]!;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.arc(cx, cy, R, (i / n) * Math.PI * 2, ((i + 1) / n) * Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.lineWidth = Math.max(px, 3);
+      ctx.strokeStyle = pal.card;
+      ctx.beginPath();
+      ctx.arc(cx, cy, R, 0, Math.PI * 2);
+      ctx.stroke();
+      break;
+    }
+    case "status": {
+      const list = Array.isArray(p.sts) && p.sts.length ? p.sts : null;
+      const st = list?.[p.st ?? 0];
+      const col = st ? (pal.colors[palKey(pal, st.c)] ?? accent) : [pal.colors.gray, pal.colors.blue, pal.colors.orange, pal.colors.green][Math.max(0, Math.min(3, p.st ?? 0))]!;
+      rr(ctx, r.x + 12, cy - Math.min(18, r.h * 0.3), r.w - 24, Math.min(36, r.h * 0.6), Math.min(18, r.h * 0.3));
+      ctx.fillStyle = col!;
+      ctx.globalAlpha = A * 0.45;
+      ctx.fill();
+      ctx.globalAlpha = A;
+      break;
+    }
+    case "tracker": {
+      const n = Math.max(1, Math.min(60, p.cells ?? 7));
+      const cols = Math.min(n, 10);
+      const rows = Math.ceil(n / cols);
+      const cw = (r.w - 32) / cols;
+      const ch = Math.min(cw, (r.h - 52) / rows);
+      for (let i = 0; i < n; i++) {
+        const on = !!(p as Record<string, unknown>)[`k:${i}`];
+        rr(ctx, r.x + 16 + (i % cols) * cw + 2, r.y + 44 + Math.floor(i / cols) * ch + 2, cw - 4, ch - 4, 4);
+        ctx.fillStyle = on ? accent : pal.surface;
+        ctx.fill();
+      }
+      bars(ctx, [12], r.x + 16, r.y + 10, r.w * 0.5, 22, r.y + 40, pal.ink4);
+      break;
+    }
+    case "gate": {
+      const R = Math.min(r.w, r.h) / 2 - 2;
+      ctx.beginPath();
+      ctx.arc(cx, cy, R, 0, Math.PI * 2);
+      ctx.fillStyle = fillOf(pal, v) ?? (p.on ? pal.colors.green! : pal.card);
+      ctx.fill();
+      ctx.lineWidth = Math.max(px, 2);
+      ctx.strokeStyle = p.on ? pal.colors.green! : pal.line;
+      ctx.stroke();
+      break;
+    }
+  }
+}
+
+/* ---------------------- уменьшенные копии картинок ----------------------
+   Рисовать оригинал в 2000 точек размером в 40 на каждом кадре дорого:
+   для дальнего плана держим копии по 64, 160 и 400 точек. */
+const MIPS = [64, 160, 400];
+const mips = new Map<string, { bmp: ImageBitmap | null; failed: boolean }>();
+let mipsBroken = typeof createImageBitmap !== "function";
+
+function mipOf(url: string, img: HTMLImageElement, screenPx: number, onload?: () => void): CanvasImageSource {
+  if (mipsBroken) return img;
+  const nat = Math.max(img.naturalWidth, img.naturalHeight);
+  const size = MIPS.find((m) => m >= screenPx * 1.15);
+  if (!size || size >= nat * 0.75) return img;
+  const key = `${size}\u0001${url}`;
+  let e = mips.get(key);
+  if (e) {
+    mips.delete(key);
+    mips.set(key, e);
+    return e.bmp ?? img;
+  }
+  e = { bmp: null, failed: false };
+  const entry = e;
+  mips.set(key, entry);
+  const k = size / nat;
+  createImageBitmap(img, { resizeWidth: Math.max(1, Math.round(img.naturalWidth * k)), resizeHeight: Math.max(1, Math.round(img.naturalHeight * k)), resizeQuality: "medium" })
+    .then((bmp) => {
+      if (mips.get(key) !== entry) return bmp.close();
+      entry.bmp = bmp;
+      onload?.();
+    })
+    .catch(() => {
+      entry.failed = true;
+      mipsBroken = true;
+    });
+  if (mips.size > 700) {
+    const first = mips.keys().next().value;
+    if (first) {
+      mips.get(first)?.bmp?.close();
+      mips.delete(first);
+    }
+  }
+  return img;
+}
+
 /* ------------------------------ превью ------------------------------ */
 
 /** Превью доски: всё содержимое, вписанное в w×h. */
@@ -627,9 +910,9 @@ export async function renderThumb(s: BoardStore, w = 640, h = 400): Promise<Blob
   const z = Math.min((w - pad * 2) / Math.max(box.w, 1), (h - pad * 2) / Math.max(box.h, 1), 1);
   const view = { x: w / 2 - (box.x + box.w / 2) * z, y: h / 2 - (box.y + box.h / 2) * z, z, w, h };
   // картинкам — шанс догрузиться
-  drawScene(ctx, s, view, { background: true, onImage: () => {} });
+  drawScene(ctx, s, view, { background: true, readonly: true, onImage: () => {} });
   await new Promise((r) => setTimeout(r, 400));
-  drawScene(ctx, s, view, { background: true, labels: true });
+  drawScene(ctx, s, view, { background: true, labels: true, readonly: true });
   return new Promise((res) => canvas.toBlob((b) => res(b), "image/webp", 0.82));
 }
 

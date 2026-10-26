@@ -162,6 +162,7 @@ export function nodeTitle(v: NodeView): string {
   const p = v.props;
   const t = (p.title || p.name || "").trim();
   if (t) return t;
+  if (v.type === "sticker") return `${TYPE_LABELS.sticker} ${p.emoji || "⭐"}`;
   if (v.text) {
     const first = v.textValue
       .split("\n")

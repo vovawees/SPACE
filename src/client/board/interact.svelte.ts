@@ -86,6 +86,11 @@ export class Interact {
   /* ---- то, что рисует слой поверх доски ---- */
   kind = $state<GestureKind | null>(null);
   marquee = $state.raw<Rect | null>(null);
+  /** Пальцем: касания добавляют к выделению и убирают из него (как с Shift). */
+  multiSelect = $state(false);
+  /** Отклик на долгое нажатие пальцем (экранные координаты). */
+  pressRing = $state.raw<{ x: number; y: number; n: number } | null>(null);
+  private pressSeq = 0;
   guides = $state.raw<Guide[]>([]);
   ink: InkDraft | null = null;
   inkRev = $state(0);
@@ -123,6 +128,8 @@ export class Interact {
   private pendingMenu: { cx: number; cy: number; el: Element; w: Pt } | null = null;
   private lastType = "mouse";
   private pressTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Касание несколькими пальцами без движения: два — отменить, три — вернуть. */
+  private multi: { t0: number; n: number; moved: boolean; x: number; y: number; d: number } | null = null;
   private down: { x: number; y: number; moved: boolean } | null = null;
   private autopanRaf = 0;
   private recentLines: { id: string; t: number }[] = [];
@@ -258,6 +265,12 @@ export class Interact {
     this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, type: e.pointerType });
     if (e.pointerType === "touch" && this.pointers.size === 2) {
       this.startPinch();
+      const [a, c] = [...this.pointers.values()];
+      this.multi = a && c ? { t0: performance.now(), n: 2, moved: false, x: (a.x + c.x) / 2, y: (a.y + c.y) / 2, d: Math.hypot(a.x - c.x, a.y - c.y) } : null;
+      return;
+    }
+    if (e.pointerType === "touch" && this.pointers.size === 3 && this.multi) {
+      this.multi.n = 3;
       return;
     }
     if (this.g || this.pointers.size > 1) return;
@@ -295,6 +308,11 @@ export class Interact {
     }
     if (this.g?.kind === "pinch") {
       this.g.move(this.ptr(e));
+      const m = this.multi;
+      if (m && !m.moved) {
+        const [a, c] = [...this.pointers.values()];
+        if (a && c && (Math.hypot((a.x + c.x) / 2 - m.x, (a.y + c.y) / 2 - m.y) > 14 || Math.abs(Math.hypot(a.x - c.x, a.y - c.y) - m.d) > 18)) m.moved = true;
+      }
       return;
     }
     const p = this.ptr(e);
@@ -312,6 +330,7 @@ export class Interact {
 
   private onUp = (e: PointerEvent) => {
     this.pointers.delete(e.pointerId);
+    if (e.pointerType === "touch" && this.multi && this.pointers.size === 0) this.multiTap();
     if (this.g?.kind === "pinch") {
       if (this.pointers.size < 2) {
         this.g = null;
@@ -325,6 +344,7 @@ export class Interact {
 
   private onCancel = (e: PointerEvent) => {
     this.pointers.delete(e.pointerId);
+    if (this.pointers.size === 0) this.multi = null;
     if (this.g?.kind === "pinch") {
       if (this.pointers.size < 2) {
         this.g = null;
@@ -659,7 +679,7 @@ export class Interact {
     const s = this.b.view;
     const sel = s.selection;
     const was = sel.has(v.id);
-    const toggle = this.mods.shift || this.mods.ctrl;
+    const toggle = this.mods.shift || this.mods.ctrl || this.multiSelect;
     if (toggle) {
       if (!was) sel.add([v.id]);
     } else if (!was) sel.set([v.id]);
@@ -853,6 +873,7 @@ export class Interact {
         if (!moved) {
           if (touchTap) {
             this.b.view.selection.clear();
+            this.multiSelect = false;
             this.tap(q, null);
           }
           return;
@@ -964,9 +985,47 @@ export class Interact {
     this.kind = "pinch";
   }
 
+  /** Все пальцы сняты: короткое касание двумя — отменить, тремя — вернуть. */
+  private multiTap() {
+    const m = this.multi;
+    this.multi = null;
+    if (!m || m.moved || performance.now() - m.t0 > 380 || this.b.readonly) return;
+    const u = this.b.store.undo;
+    if (m.n === 2 ? !u.canUndo() : !u.canRedo()) return void toasts.show(m.n === 2 ? "Нечего отменять" : "Нечего возвращать", { ms: 1200 });
+    if (m.n === 2) u.undo();
+    else u.redo();
+    navigator.vibrate?.(10);
+    toasts.show(m.n === 2 ? "Отменено · два пальца" : "Возвращено · три пальца", { ms: 1200 });
+  }
+
   private longPress(p: Ptr, t: Element) {
     if (!this.g || this.down?.moved) return;
     const g = this.g;
+    // пустое место пальцем: подержать и повести — рамка выделения, отпустить — меню
+    if (g.kind === "pan" && p.type === "touch" && !t.closest("[data-id]")) {
+      g.cancel();
+      navigator.vibrate?.(12);
+      const mg = this.marqueeGesture(p);
+      let moved = false;
+      this.g = {
+        kind: "marquee",
+        autopan: true,
+        move: (q) => {
+          if (!moved && Math.hypot(q.sx - p.sx, q.sy - p.sy) < 8) return;
+          moved = true;
+          mg.move(q);
+        },
+        up: (q) => {
+          if (moved) return mg.up(q);
+          mg.cancel();
+          this.openContextMenu(p.cx, p.cy, t, p.w);
+        },
+        cancel: () => mg.cancel(),
+      };
+      this.kind = "marquee";
+      this.pressRing = { x: p.sx, y: p.sy, n: ++this.pressSeq };
+      return;
+    }
     this.g = null;
     this.kind = null;
     this.primary = -1;

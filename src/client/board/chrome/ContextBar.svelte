@@ -33,6 +33,11 @@
   import TextCursorInput from "@lucide/svelte/icons/text-cursor-input";
   import TextWrap from "@lucide/svelte/icons/text-wrap";
   import Trash from "@lucide/svelte/icons/trash";
+  import Paintbrush from "@lucide/svelte/icons/paintbrush";
+  import Settings2 from "@lucide/svelte/icons/settings-2";
+  import Zap from "@lucide/svelte/icons/zap";
+  import SquareMousePointer from "@lucide/svelte/icons/square-mouse-pointer";
+  import { MediaQuery } from "svelte/reactivity";
   import { download } from "../../lib/util.ts";
   import Avatar from "../../ui/Avatar.svelte";
   import { menu, type MenuEntry } from "../../ui/menu.svelte.ts";
@@ -59,8 +64,12 @@
     type NodeType,
     type Route,
     type ShapeKind,
+    TITLED_TYPES,
+    WIDGET_TYPES,
   } from "../model.ts";
   import { embedFor } from "../embeds.ts";
+  import { canLogic, ruleSummary } from "../logic.svelte.ts";
+  import { primaryAction, widgetItems } from "../nodes/widgetItems.ts";
   import { align, distribute, fitFrame, removeSelected, tidy, wrapInFrame } from "../ops.ts";
 
   const b = useBoard();
@@ -87,8 +96,14 @@
   let bh = $state(0);
   const GAP = 40;
 
+  /* на телефоне панель не летает за выделением, а стоит внизу над инструментами */
+  const narrow = new MediaQuery("max-width: 640px");
+  const coarse = new MediaQuery("pointer: coarse");
+  const docked = $derived(narrow.current);
+
   const pos = $derived.by(() => {
     if (!visible) return null;
+    if (docked) return { x: 0, y: 0, above: true };
     const r = s.boundsOfIds(s.selection.ids);
     if (!r) return null;
     const a = cam.toScreen(r.x, r.y);
@@ -120,7 +135,7 @@
   const anchorOf = (e: MouseEvent) => e.currentTarget as HTMLElement;
   const drop = (e: MouseEvent, items: MenuEntry[]) => menu.dropdown(anchorOf(e), items, place);
 
-  const colorTypes = new Set<NodeType>(["note", "text", "code", "shape", "path", "ink", "frame", "link", "file", "shelf", "task", "table", "poll", "timer", "audio", "counter", "dice", "progress"]);
+  const colorTypes = new Set<NodeType>(["note", "text", "code", "shape", "path", "ink", "frame", "link", "file", "shelf", "task", "table", "poll", "timer", "audio", "counter", "dice", "progress", ...WIDGET_TYPES]);
   const hasColor = $derived(views.some((v) => colorTypes.has(v.type)));
   const color = $derived.by(() => {
     const c = new Set(views.filter((v) => colorTypes.has(v.type)).map((v) => v.props.color ?? "default"));
@@ -199,6 +214,38 @@
     drop(e, nodeMenu(b, ix));
   }
 
+  /**
+   * Панели оформления и логики — сбоку от выделения, чтобы не закрывать сам объект
+   * (если сбоку тесно — под кнопкой; на телефоне — снизу листом).
+   */
+  const at = (e: MouseEvent) => {
+    const cam = b.camera;
+    const r = s.boundsOfIds(s.selection.ids);
+    if (r) {
+      const a = cam.toScreen(r.x, r.y);
+      const c = cam.toScreen(r.x + r.w, r.y);
+      const y = Math.max(64, Math.min(cam.vh - 300, c.y - 8));
+      if (c.x + 14 + 320 <= cam.vw - 8) return { x: c.x + 14, y };
+      if (a.x - 14 - 320 >= 8) return { x: a.x - 14 - 320, y };
+    }
+    const rr = anchorOf(e).getBoundingClientRect();
+    return { x: rr.left, y: rr.bottom };
+  };
+  function openStyle(e: MouseEvent) {
+    b.ui.logic = null;
+    b.ui.style = b.ui.style ? null : at(e);
+  }
+  function openLogic(e: MouseEvent, id: string) {
+    b.ui.style = null;
+    b.ui.logic = b.ui.logic?.id === id ? null : { ...at(e), id };
+  }
+
+  /* ------------------------------ виджеты ------------------------------ */
+
+  const widget = $derived(only && WIDGET_TYPES.has(only) ? only : null);
+  const primary = $derived(widget ? primaryAction(b, views) : null);
+  const logicOk = $derived(one?.type === "path" && canLogic(s, one));
+
   /** Подменю из готового списка действий — для быстрых кнопок. */
   function sub(e: MouseEvent, items: MenuEntry[], label: string) {
     const it = items.find((x): x is Exclude<MenuEntry, "-" | { heading: string }> => typeof x === "object" && "label" in x && x.label === label);
@@ -272,7 +319,8 @@
     aria-label="Свойства выделенного"
     bind:offsetWidth={bw}
     bind:offsetHeight={bh}
-    style:transform="translate({pos.x}px, {pos.y}px)"
+    class:docked
+    style:transform={docked ? null : `translate(${pos.x}px, ${pos.y}px)`}
     onpointerdown={(e) => e.stopPropagation()}
   >
     {#if locked}
@@ -475,6 +523,40 @@
         <button class="chip" onclick={() => download(fileUrl(one.props.src, { dl: true, name: one.props.name }), one.props.name || "audio")} aria-label="Скачать" {@attach tip("Скачать", undefined, "top")}><Download size={15} /></button>
       {/if}
 
+      {#if widget}
+        {#if primary}
+          <button class="chip" onclick={primary.run} aria-label={primary.label} {@attach tip(primary.label, undefined, "top")}>
+            <span class="lbl">{primary.label}</span>
+          </button>
+        {/if}
+        <button class="chip" onclick={(e) => drop(e, widgetItems(b, views))} aria-label="Настроить" {@attach tip("Настроить", undefined, "top")}>
+          <Settings2 size={15} /><ChevronDown size={13} />
+        </button>
+        {#if one && TITLED_TYPES.has(one.type) && one.type !== "timer" && one.type !== "counter" && one.type !== "progress"}
+          <button class="chip" onclick={() => (ix.renaming = one.id)} aria-label="Переименовать" {@attach tip("Переименовать", "Enter", "top")}><Pencil size={15} /></button>
+        {/if}
+      {/if}
+
+      {#if logicOk && one}
+        <button class="chip" class:on={!!one.props.lg} onclick={(e) => openLogic(e, one.id)} aria-label="Логика" {@attach tip(one.props.lg ? "Логика стрелки" : "Добавить логику", undefined, "top")}>
+          <Zap size={15} />{#if one.props.lg}<span class="lbl">{ruleSummary(s, one).replace("⚡", "").trim() || "вкл"}</span>{/if}
+        </button>
+      {/if}
+
+      <button class="chip" class:on={!!b.ui.style} onclick={openStyle} aria-label="Оформление" {@attach tip("Оформление", undefined, "top")}><Paintbrush size={15} /></button>
+      {#if docked || coarse.current}
+        <button
+          class="chip"
+          class:on={ix.multiSelect}
+          aria-pressed={ix.multiSelect}
+          onclick={() => (ix.multiSelect = !ix.multiSelect)}
+          aria-label="Выбирать несколько"
+          {@attach tip(ix.multiSelect ? "Касание добавляет или убирает объект" : "Выбирать несколько касаниями", undefined, "top")}
+        >
+          <SquareMousePointer size={15} />{#if ix.multiSelect}<span class="lbl">{views.length}</span>{/if}
+        </button>
+      {/if}
+
       {#if views.length > 1}
         <div class="tb-sep"></div>
         <button class="chip" onclick={alignMenu} aria-label="Выровнять" {@attach tip("Выровнять", undefined, "top")}><AlignStartVertical size={16} /></button>
@@ -507,6 +589,15 @@
     scrollbar-width: none;
     animation: ctx-in 160ms var(--ease-out);
     z-index: 1;
+  }
+  .ctx.docked {
+    left: 50%;
+    top: auto;
+    bottom: calc(118px + env(safe-area-inset-bottom, 0px));
+    translate: -50% 0;
+    max-width: calc(100vw - 12px);
+    padding: 5px;
+    border-radius: var(--r-4);
   }
   @keyframes ctx-in {
     from {

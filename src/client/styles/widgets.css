@@ -1250,3 +1250,68 @@ div.big-btn .rename {
 [data-reduce-motion] .wh-rot {
   transition-timing-function: ease-out;
 }
+
+/* ---------------------------- стрелки с логикой ---------------------------- */
+
+.path-svg .flow {
+  fill: none;
+  stroke: color-mix(in oklab, var(--c-yellow) 85%, white);
+  stroke-linecap: round;
+  stroke-dasharray: 1 11;
+  opacity: 0.9;
+  animation: lg-flow 0.9s linear infinite;
+}
+@keyframes lg-flow {
+  to {
+    stroke-dashoffset: -12;
+  }
+}
+.board.mid .path-svg .flow {
+  animation: none;
+}
+.path-svg .spark {
+  fill: none;
+  stroke: var(--c-yellow);
+  stroke-linecap: round;
+  stroke-dasharray: 14 100;
+  stroke-dashoffset: 14;
+  filter: drop-shadow(0 0 4px var(--c-yellow));
+  animation: lg-spark 0.65s var(--ease-out) forwards;
+}
+@keyframes lg-spark {
+  from {
+    stroke-dashoffset: 14;
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  to {
+    stroke-dashoffset: -100;
+    opacity: 0;
+  }
+}
+.path-label.path-logic {
+  padding: 1px 7px;
+  border-radius: 99px;
+  font-size: 12px;
+  font-weight: 650;
+  color: color-mix(in oklab, var(--c-yellow) 70%, var(--ink));
+  background: var(--bg);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--c-yellow) 45%, transparent);
+  white-space: nowrap;
+  transition: box-shadow 0.3s;
+}
+.path-label.path-logic.pulsed {
+  box-shadow:
+    inset 0 0 0 1px var(--c-yellow),
+    0 0 14px color-mix(in oklab, var(--c-yellow) 60%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .path-svg .flow {
+    animation: none;
+  }
+}
+[data-reduce-motion] .path-svg .flow {
+  animation: none;
+}

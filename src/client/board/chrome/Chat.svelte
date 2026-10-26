@@ -16,6 +16,22 @@
 
   const b = useBoard();
   const so = b.social;
+
+  /* На телефоне чат — лист снизу поверх панелей. Экранная клавиатура
+     сжимает видимую область: лист поднимается над ней. */
+  let kb = $state(0);
+  $effect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const upd = () => (kb = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)));
+    upd();
+    vv.addEventListener("resize", upd);
+    vv.addEventListener("scroll", upd);
+    return () => {
+      vv.removeEventListener("resize", upd);
+      vv.removeEventListener("scroll", upd);
+    };
+  });
   let text = $state("");
   let list: HTMLDivElement;
   let input = $state<HTMLTextAreaElement>();
@@ -95,7 +111,7 @@
   }
 </script>
 
-<aside class="chat panel" aria-label="Чат доски">
+<aside class="chat panel" aria-label="Чат доски" style:--kb="{kb}px">
   <header>
     <h2><MessageCircle size={16} /> Чат доски</h2>
     <span class="online">
@@ -109,7 +125,7 @@
       <div class="empty">
         <div class="empty-ic"><MessageCircle size={22} /></div>
         Обсуждайте доску прямо здесь. Сообщения видят все участники, они сохраняются вместе с доской.
-        <small>Быстрое сообщение у курсора — клавиша <span class="kbd"><span>/</span></span></small>
+        <small class="kbd-hint">Быстрое сообщение у курсора — клавиша <span class="kbd"><span>/</span></span></small>
       </div>
     {/if}
     {#each groups as g (g.key)}
@@ -406,13 +422,29 @@
     text-align: center;
   }
   @media (max-width: 760px) {
+    /* поверх панели инструментов и масштаба (они под листом прячутся) */
     .chat {
       top: auto;
-      left: 8px;
-      right: 8px;
-      bottom: 8px;
+      left: 6px;
+      right: 6px;
+      bottom: calc(6px + max(env(safe-area-inset-bottom, 0px), var(--kb, 0px)));
       width: auto;
-      height: 56vh;
+      height: min(62dvh, calc(100dvh - var(--kb, 0px) - 76px));
+      min-height: 220px;
+      z-index: var(--z-pop);
+      border-radius: var(--r-3) var(--r-3) var(--r-2) var(--r-2);
+      animation-name: sheet-in;
+    }
+    @keyframes sheet-in {
+      from {
+        opacity: 0;
+        transform: translateY(24px);
+      }
+    }
+  }
+  @media (pointer: coarse) {
+    .kbd-hint {
+      display: none;
     }
   }
 </style>

@@ -246,9 +246,37 @@ export function ruleSummary(s: BoardStore, arrow: NodeView): string {
     case "fx":
       return "⚡ " + (r.x === "confetti" ? "🎉" : r.x === "hearts" ? "💖" : r.x === "stars" ? "⭐" : r.x === "ding" || r.x === "fanfare" ? "🔔" : "✨");
     default:
-      return "⚡";
+      return SUMMARY[r.do] ? `⚡ ${SUMMARY[r.do]}` : "⚡";
   }
 }
+
+/** Значки остальных действий для подписи на стрелке. */
+const SUMMARY: Record<string, string> = {
+  show: "👁",
+  hide: "🙈",
+  togglevis: "👁⇄",
+  color: "🎨",
+  go: "🎥",
+  say: "💬",
+  roll: "🎲",
+  spin: "🎡",
+  start: "▶",
+  stop: "⏸",
+  reset: "↺",
+  check: "✓",
+  uncheck: "☐",
+  on: "вкл",
+  off: "выкл",
+  toggle: "⇄",
+  next: "→",
+  setst: "→",
+  press: "👆",
+  mark: "✓",
+  unmark: "↶",
+  clear: "⌫",
+  addsrc: "+n",
+  subsrc: "−n",
+};
 
 /** Стрелка годится для логики: оба конца привязаны к разным объектам. */
 export function logicEnds(s: BoardStore, arrow: NodeView): { src: NodeView; tgt: NodeView } | null {
@@ -311,7 +339,7 @@ const same = (a: Snap, b: Snap) => a.n === b.n && a.sh === b.sh && a.on === b.on
 /** Какие события случились с источником для этого правила. */
 function eventsFor(type: NodeType, o: Snap, c: Snap, r: LogicRule): Set<string> {
   const ev = new Set<string>();
-  const N = typeof r.n === "number" ? r.n : NaN;
+  const N = typeof r.tn === "number" ? r.tn : NaN;
   const num = (a: number | null) => a ?? 0;
   switch (type) {
     case "task":
@@ -350,13 +378,13 @@ function eventsFor(type: NodeType, o: Snap, c: Snap, r: LogicRule): Set<string> 
     case "wheel":
       if (c.k !== o.k && c.k > 0) {
         ev.add("result");
-        if (r.x && c.x === r.x) ev.add("resultx");
+        if (r.tx && c.x === r.tx) ev.add("resultx");
       }
       break;
     case "status":
       if (c.x !== o.x) {
         ev.add("change");
-        if (r.x !== undefined && c.x === r.x) ev.add("state");
+        if (r.tx !== undefined && c.x === r.tx) ev.add("state");
       }
       break;
     case "tracker":
@@ -821,9 +849,10 @@ export class Logic {
   }
 
   private pulse(arrowId: string) {
-    this.pulses.set(arrowId, ++this.pulseSeq);
+    const seq = ++this.pulseSeq;
+    this.pulses.set(arrowId, seq);
     setTimeout(() => {
-      if (this.pulses.get(arrowId) === this.pulseSeq) this.pulses.delete(arrowId);
+      if (this.pulses.get(arrowId) === seq) this.pulses.delete(arrowId);
     }, 1200);
   }
 }
