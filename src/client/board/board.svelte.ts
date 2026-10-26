@@ -14,6 +14,7 @@ import type { Pt, Rect } from "./geometry.ts";
 import type { Color, Dash, Fill, Head, HeadSize, Route, ShapeKind, StrokeSize, TextSize } from "./model.ts";
 import type { Interact } from "./interact.svelte.ts";
 import { Logic } from "./logic.svelte.ts";
+import { Watchdog } from "./net.ts";
 import { Social } from "./social.svelte.ts";
 import { BoardStore, type NodeView } from "./store.svelte.ts";
 
@@ -75,6 +76,10 @@ export function provideBoard(b: Board) {
 
 const STYLE_KEY = "space:style";
 
+/** Пауза между попытками подключения — от полсекунды до 5 с (по умолчанию
+    растёт до 30 с). Поля уходят в сокет провайдера. */
+const RETRY = { delay: 500, minDelay: 400, maxDelay: 5000, factor: 1.6 };
+
 /** Сколько узлов в зоне отрисовки, при котором DOM уступает место canvas (и обратно). */
 const DENSE = 700;
 const DENSE_BACK = 480;
@@ -102,6 +107,8 @@ export class Board {
   /** Права на доске от сервера; без связи — по роли. */
   perms = $state<BoardPerms>({ edit: true, comment: true, chat: true, invite: true, manage: false, restore: true, copy: true });
   status = $state<Status>("connecting");
+  /** С какого момента нет связи (null — всё хорошо). */
+  downAt = $state<number | null>(Date.now());
   synced = $state(false);
   localReady = $state(false);
   unsynced = $state(0);
@@ -173,6 +180,9 @@ export class Board {
   readonly social: Social;
   /** Правила на стрелках: «когда — тогда». */
   readonly logic: Logic;
+  /** Перезапуск зависшей связи. */
+  private readonly net: Watchdog;
+  private closed = false;
 
   constructor(id: string) {
     this.id = id;
@@ -189,8 +199,13 @@ export class Board {
       name: id,
       document: this.doc,
       flushDelay: 25,
+      ...RETRY,
       onStatus: ({ status }) => {
-        this.status = status === "connected" ? "online" : status === "connecting" ? "connecting" : "offline";
+        const next: Status = status === "connected" ? "online" : status === "connecting" ? "connecting" : "offline";
+        if (next === this.status) return;
+        this.status = next;
+        if (next === "online") this.downAt = null;
+        else this.downAt ??= Date.now();
       },
       onSynced: () => (this.synced = true),
       onAuthenticated: ({ scope }) => {
@@ -200,6 +215,7 @@ export class Board {
       onUnsyncedChanges: ({ number }) => (this.unsynced = number),
       onAwarenessChange: () => this.readPeers(),
     });
+    this.net = new Watchdog(this.provider, () => this.closed || !!this.denied);
 
     this.setPresence({
       user: { id: me.id, name: me.name, color: me.color, colorLight: me.color + "33" },
@@ -314,7 +330,14 @@ export class Board {
     if (!this.toolLock) this.tool = "select";
   }
 
+  /** «Повторить»: подключиться сейчас, не дожидаясь следующей попытки. */
+  reconnect() {
+    this.net.now();
+  }
+
   destroy() {
+    this.closed = true;
+    this.net.destroy();
     clearTimeout(this.awarenessTimer);
     runs.stopAll();
     this.logic.destroy();

@@ -2,7 +2,9 @@
   import { MediaQuery } from "svelte/reactivity";
   import { ask } from "../../ui/confirm.svelte.ts";
   /* Верхняя панель: домой, название, связь; справа — люди, доступ, история, меню. */
+  import Cloud from "@lucide/svelte/icons/cloud";
   import CloudOff from "@lucide/svelte/icons/cloud-off";
+  import RefreshCw from "@lucide/svelte/icons/refresh-cw";
   import Copy from "@lucide/svelte/icons/copy";
   import Download from "@lucide/svelte/icons/download";
   import Ellipsis from "@lucide/svelte/icons/ellipsis";
@@ -59,17 +61,34 @@
     e.stopPropagation();
   }
 
-  /* связь: «подключение» показываем, только если оно затянулось */
-  let slow = $state(false);
+  /* связь: значок — только если подключение затянулось (1,5 с);
+     дольше 8 с — «Нет связи» и «Повторить»; вернулась — короткое «Онлайн» */
+  let now = $state(Date.now());
+  let wasDown = $state(false);
   $effect(() => {
-    if (b.status === "online") {
-      slow = false;
-      return;
-    }
-    const t = setTimeout(() => (slow = true), 1500);
+    if (b.downAt === null) return;
+    now = Date.now();
+    const t = setInterval(() => (now = Date.now()), 500);
+    return () => clearInterval(t);
+  });
+  const downFor = $derived(b.downAt === null ? 0 : Math.max(0, now - b.downAt));
+  const net = $derived<"ok" | "slow" | "lost" | "back">(
+    b.downAt === null ? (wasDown ? "back" : "ok") : downFor > 8000 ? "lost" : downFor > 1500 ? "slow" : "ok",
+  );
+  $effect(() => {
+    if (net === "lost") wasDown = true;
+  });
+  $effect(() => {
+    if (net !== "back") return;
+    const t = setTimeout(() => (wasDown = false), 1800);
     return () => clearTimeout(t);
   });
-  const offline = $derived(b.status !== "online" && slow);
+  let retrying = $state(false);
+  function retry() {
+    retrying = true;
+    b.reconnect();
+    setTimeout(() => (retrying = false), 1200);
+  }
 
   const people = $derived(b.people);
   // на телефоне места мало: один аватар и «+N»
@@ -215,13 +234,20 @@
       onkeydown={onTitleKey}
     />
   {/if}
-  {#if offline}
-    <span
-      class="badge warn"
-      {@attach tip(b.status === "offline" ? "Нет связи с сервером. Правки сохраняются на устройстве и уйдут, когда связь вернётся." : "Подключаемся к серверу…", undefined, "bottom")}
-    >
-      {#if b.status === "offline"}<CloudOff size={13} /> Офлайн{:else}<span class="spin sm"></span> Связь{/if}
+  {#if net === "slow" || (net === "lost" && retrying)}
+    <span class="badge warn" {@attach tip("Подключаемся к серверу… Правки не потеряются.", undefined, "bottom")}>
+      <span class="spin sm"></span> Подключение…
     </span>
+  {:else if net === "lost"}
+    <button
+      class="badge warn net"
+      onclick={retry}
+      {@attach tip("Нет связи с сервером. Правки сохраняются на устройстве и уйдут, когда связь вернётся. Нажмите, чтобы подключиться сейчас.", undefined, "bottom")}
+    >
+      <CloudOff size={13} /> <span class="lbl">Нет связи</span> <span class="retry"><RefreshCw size={12} /> Повторить</span>
+    </button>
+  {:else if net === "back"}
+    <span class="badge ok"><Cloud size={13} /> Онлайн</span>
   {/if}
 </div>
 
@@ -370,6 +396,34 @@
   .badge.warn {
     color: #e9b45c;
     background: rgb(233 180 92 / 0.13);
+  }
+  .badge.ok {
+    color: #5fcf8e;
+    background: rgb(95 207 142 / 0.13);
+    animation: fade-in 0.2s ease-out;
+  }
+  button.badge.net {
+    cursor: pointer;
+    padding-right: 4px;
+  }
+  .badge .retry {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 18px;
+    padding: 0 7px;
+    margin-left: 3px;
+    border-radius: var(--r-full);
+    background: rgb(233 180 92 / 0.2);
+    color: #f3c77a;
+  }
+  button.badge.net:hover .retry {
+    background: rgb(233 180 92 / 0.32);
+  }
+  @media (max-width: 640px) {
+    .badge .lbl {
+      display: none;
+    }
   }
   .spin.sm {
     width: 11px;
