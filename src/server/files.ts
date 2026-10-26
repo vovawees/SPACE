@@ -12,6 +12,7 @@ import type { UserRow } from "./auth.ts";
 import { config } from "./config.ts";
 import { now, q } from "./db.ts";
 import { bad, HttpError, notFound } from "./http.ts";
+import { uploadCap } from "./ranks.ts";
 
 const filesDir = path.join(config.storageDir, "files");
 const tmpDir = path.join(config.storageDir, "tmp");
@@ -48,7 +49,8 @@ export async function receiveUpload(c: Context, user: UserRow): Promise<FileInfo
   const name = cleanName(c.req.header("x-file-name"));
   const mime = cleanMime(c.req.header("content-type"));
   const declared = Number(c.req.header("content-length") || 0);
-  if (declared > config.maxUploadBytes) throw tooLarge();
+  const cap = uploadCap(user);
+  if (declared > cap) throw tooLarge(cap);
   const body = c.req.raw.body;
   if (!body) throw bad("Пустой файл");
 
@@ -58,7 +60,7 @@ export async function receiveUpload(c: Context, user: UserRow): Promise<FileInfo
   const meter = new Transform({
     transform(chunk: Buffer, _enc, cb) {
       size += chunk.length;
-      if (size > config.maxUploadBytes) return cb(tooLarge());
+      if (size > cap) return cb(tooLarge(cap));
       hash.update(chunk);
       cb(null, chunk);
     },
@@ -88,8 +90,8 @@ export async function receiveUpload(c: Context, user: UserRow): Promise<FileInfo
   return { hash: digest, size, mime, name };
 }
 
-function tooLarge() {
-  return new HttpError(413, "too_large", `Файл больше ${Math.round(config.maxUploadBytes / 1048576)} МБ`);
+function tooLarge(cap = config.maxUploadBytes) {
+  return new HttpError(413, "too_large", `Файл больше ${Math.max(1, Math.round(cap / 1048576))} МБ — это предел для вашего ранга или остаток места`);
 }
 
 function disposition(kind: "inline" | "attachment", name: string): string {

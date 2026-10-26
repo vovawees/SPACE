@@ -25,3 +25,10 @@ export function online(boardId: string): UserRef[] {
   for (const u of m.values()) seen.set(u.id, u);
   return [...seen.values()];
 }
+
+/** Сколько людей сейчас на досках (без повторов). */
+export function onlineTotal(): number {
+  const ids = new Set<string>();
+  for (const b of boards.values()) for (const u of b.values()) ids.add(u.id);
+  return ids.size;
+}

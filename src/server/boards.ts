@@ -1,20 +1,24 @@
 /* Доски и доступ к ним.
 
    Роль человека на доске = максимум из его личной роли (участник) и роли
-   «по ссылке». Открыл доску по ссылке — автоматически становится участником,
-   чтобы доска появилась у него на главной. Владелец может сменить доступ
-   по ссылке (выключен / просмотр / редактирование) и роли участников. */
+   «по ссылке». Открыл доску по ссылке или по приглашению — становится
+   участником, и доска появляется у него на главной. Роли: владелец, хост
+   (со-владелец), редактор, комментатор, зритель; «banned» в members —
+   человек удалён с доски и не вернётся даже по общей ссылке. */
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { customAlphabet } from "nanoid";
 import * as Y from "yjs";
 import { metaOf, nodesOf } from "../shared/doc.ts";
-import type { BoardSummary, LinkAccess, Member, Role } from "../shared/types.ts";
+import type { BoardLink, BoardPerms, BoardSettings, BoardSummary, LinkAccess, Member, Role } from "../shared/types.ts";
+import { atLeastRole, roleRank } from "../shared/types.ts";
 import { toRef, type UserRow } from "./auth.ts";
 import { config } from "./config.ts";
 import { now, q, tx } from "./db.ts";
-import { forbidden, notFound } from "./http.ts";
+import { bad, forbidden, HttpError, notFound } from "./http.ts";
 import { online } from "./presence.ts";
+import { limitsOf, rankOf } from "./ranks.ts";
 
 export const newBoardId = customAlphabet("23456789abcdefghjkmnpqrstuvwxyz", 12);
 
@@ -28,16 +32,48 @@ export interface BoardRow {
   created_at: number;
   updated_at: number;
   deleted_at: number | null;
+  settings: string | null;
 }
 
-const RANK: Record<Role, number> = { viewer: 1, editor: 2, owner: 3 };
-const BOARD_COLS = "id, title, owner_id, link_access, nodes, thumb_at, created_at, updated_at, deleted_at";
+const BOARD_COLS = "id, title, owner_id, link_access, nodes, thumb_at, created_at, updated_at, deleted_at, settings";
+
+export const DEFAULT_BOARD_SETTINGS: BoardSettings = { lock: false, chat: "all", invite: "editors", history: "editors", copy: true, maxMembers: 0 };
+
+export function boardSettings(row: Pick<BoardRow, "settings">): BoardSettings {
+  try {
+    const raw = row.settings ? (JSON.parse(row.settings) as Partial<BoardSettings>) : {};
+    return { ...DEFAULT_BOARD_SETTINGS, ...raw };
+  } catch {
+    return { ...DEFAULT_BOARD_SETTINGS };
+  }
+}
+
+export function saveBoardSettings(boardId: string, patch: Partial<BoardSettings>, cur: BoardSettings): BoardSettings {
+  const next = { ...cur, ...patch };
+  q("UPDATE boards SET settings = ? WHERE id = ?").run(JSON.stringify(next), boardId);
+  return next;
+}
+
+/** Права человека с ролью role при таких настройках доски. */
+export function permsOf(role: Role | null, st: BoardSettings): BoardPerms {
+  const edit = atLeastRole(role, st.lock ? "host" : "editor");
+  const comment = atLeastRole(role, "commenter");
+  return {
+    edit,
+    comment,
+    chat: st.chat === "off" ? false : st.chat === "editors" ? edit : comment,
+    invite: st.invite === "all" ? !!role : st.invite === "editors" ? atLeastRole(role, "editor") : atLeastRole(role, "host"),
+    manage: atLeastRole(role, "host"),
+    restore: st.history === "hosts" ? atLeastRole(role, "host") : edit,
+    copy: st.copy ? !!role : atLeastRole(role, "host"),
+  };
+}
 
 export const thumbsDir = path.join(config.storageDir, "thumbs");
 fs.mkdirSync(thumbsDir, { recursive: true });
 
 export function atLeast(role: Role | null, need: Role): boolean {
-  return !!role && RANK[role] >= RANK[need];
+  return atLeastRole(role, need);
 }
 
 export function getBoard(id: string): BoardRow | null {
@@ -49,29 +85,47 @@ export function getBoard(id: string): BoardRow | null {
 }
 
 function linkRole(access: LinkAccess): Role | null {
-  return access === "edit" ? "editor" : access === "view" ? "viewer" : null;
+  return access === "edit" ? "editor" : access === "comment" ? "commenter" : access === "view" ? "viewer" : null;
 }
 
-function memberRole(boardId: string, userId: string): Role | null {
+function memberRole(boardId: string, userId: string): Role | "banned" | null {
   const row = q("SELECT role FROM members WHERE board_id = ? AND user_id = ?").get(boardId, userId) as
-    | { role: Role }
+    | { role: Role | "banned" }
     | undefined;
   return row?.role ?? null;
+}
+
+const maxRole = (a: Role | null, b: Role | null): Role | null => (roleRank(a) >= roleRank(b) ? a : b);
+
+/** Сколько людей уже на доске и сколько можно. */
+function memberCap(board: BoardRow): { count: number; cap: number } {
+  const count = (q("SELECT COUNT(*) AS n FROM members WHERE board_id = ? AND role != 'banned'").get(board.id) as { n: number }).n;
+  const owner = q("SELECT rank FROM users WHERE id = ?").get(board.owner_id) as { rank: string } | undefined;
+  const byRank = limitsOf(rankOf(owner ?? {})).members;
+  const bySettings = boardSettings(board).maxMembers;
+  const caps = [byRank, bySettings].filter((n) => n > 0);
+  return { count, cap: caps.length ? Math.min(...caps) : 0 };
+}
+
+function addMember(board: BoardRow, userId: string, role: Role) {
+  const { count, cap } = memberCap(board);
+  if (cap > 0 && count >= cap) throw new HttpError(403, "board_full", `На доске уже ${count} из ${cap} участников`);
+  q("INSERT OR IGNORE INTO members (board_id, user_id, role, opened_at) VALUES (?, ?, ?, ?)").run(board.id, userId, role, now());
 }
 
 /** Действующая роль. join — записать человека в участники (открыл по ссылке). */
 export function roleOn(board: BoardRow, user: UserRow, join = false): Role | null {
   if (board.owner_id === user.id) return "owner";
   const mine = memberRole(board.id, user.id);
+  if (mine === "banned") return null;
   const byLink = linkRole(board.link_access);
-  const role = !mine ? byLink : !byLink ? mine : RANK[mine] >= RANK[byLink] ? mine : byLink;
+  const role = maxRole(mine, byLink);
   if (join && role && !mine) {
-    q("INSERT OR IGNORE INTO members (board_id, user_id, role, opened_at) VALUES (?, ?, ?, ?)").run(
-      board.id,
-      user.id,
-      byLink ?? "viewer",
-      now(),
-    );
+    try {
+      addMember(board, user.id, byLink ?? "viewer");
+    } catch (err) {
+      if (join) throw err;
+    }
   }
   return role;
 }
@@ -83,9 +137,81 @@ export function requireBoard(id: string, user: UserRow, need: Role = "viewer", j
   const role = roleOn(board, user, join);
   if (!role) throw forbidden("Доступ к этой доске закрыт");
   if (!atLeast(role, need)) {
-    throw forbidden(need === "owner" ? "Это может только владелец доски" : "Недостаточно прав");
+    throw forbidden(need === "owner" ? "Это может только владелец доски" : need === "host" ? "Это могут только хосты доски" : "Недостаточно прав");
   }
-  return { board, role };
+  return { board, role, settings: boardSettings(board), perms: permsOf(role, boardSettings(board)) };
+}
+
+/* ------------------------ приглашения на доску ------------------------ */
+
+interface LinkRow {
+  id: string;
+  board_id: string;
+  role: Exclude<Role, "owner">;
+  label: string | null;
+  uses: number;
+  max_uses: number | null;
+  expires_at: number | null;
+  created_by: string | null;
+  created_at: number;
+  cb_name: string | null;
+  cb_color: string | null;
+}
+
+const LINK_SQL = "SELECT l.*, u.name AS cb_name, u.color AS cb_color FROM board_links l LEFT JOIN users u ON u.id = l.created_by";
+
+const toLink = (r: LinkRow): BoardLink => ({
+  id: r.id,
+  role: r.role,
+  label: r.label,
+  uses: r.uses,
+  maxUses: r.max_uses,
+  expiresAt: r.expires_at,
+  createdAt: r.created_at,
+  createdBy: r.created_by ? { id: r.created_by, name: r.cb_name ?? "?", color: r.cb_color ?? "#888888" } : null,
+});
+
+export function listLinks(boardId: string): BoardLink[] {
+  return (q(`${LINK_SQL} WHERE l.board_id = ? ORDER BY l.created_at DESC`).all(boardId) as unknown as LinkRow[]).map(toLink);
+}
+
+export function createLink(board: BoardRow, by: UserRow, myRole: Role, opts: { role: Exclude<Role, "owner">; label: string | null; maxUses: number | null; days: number | null }): BoardLink {
+  // выдать можно не больше своей роли; хоста назначает только владелец
+  if (roleRank(opts.role) > roleRank(myRole) || (opts.role === "host" && myRole !== "owner")) throw forbidden("Нельзя пригласить с ролью выше своей");
+  const id = crypto.randomBytes(12).toString("base64url");
+  q("INSERT INTO board_links (id, board_id, role, label, max_uses, expires_at, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run(
+    id,
+    board.id,
+    opts.role,
+    opts.label,
+    opts.maxUses,
+    opts.days ? now() + opts.days * 86400_000 : null,
+    by.id,
+    now(),
+  );
+  return listLinks(board.id).find((l) => l.id === id)!;
+}
+
+export function deleteLink(boardId: string, linkId: string): void {
+  q("DELETE FROM board_links WHERE board_id = ? AND id = ?").run(boardId, linkId);
+}
+
+/** Войти на доску по приглашению: роль из ссылки (если выше нынешней). */
+export function acceptLink(boardId: string, token: string, user: UserRow): Role {
+  const board = getBoard(boardId);
+  if (!board) throw notFound("Доска не найдена");
+  const row = q("SELECT * FROM board_links WHERE id = ? AND board_id = ?").get(token, boardId) as LinkRow | undefined;
+  if (!row) throw new HttpError(410, "link_invalid", "Приглашение отозвано или неверно");
+  if (row.expires_at && row.expires_at < now()) throw new HttpError(410, "link_expired", "Срок приглашения истёк");
+  if (row.max_uses && row.uses >= row.max_uses) throw new HttpError(410, "link_used", "Приглашение уже использовали максимальное число раз");
+  if (board.owner_id === user.id) return "owner";
+  const mine = memberRole(board.id, user.id);
+  if (mine === "banned") throw forbidden("Вас удалили с этой доски");
+  if (!mine) addMember(board, user.id, row.role);
+  else if (roleRank(row.role) > roleRank(mine)) q("UPDATE members SET role = ? WHERE board_id = ? AND user_id = ?").run(row.role, board.id, user.id);
+  else return mine;
+  q("UPDATE board_links SET uses = uses + 1 WHERE id = ?").run(token);
+  return roleOn(board, user) ?? row.role;
 }
 
 export function loadState(id: string): Uint8Array | null {
@@ -139,10 +265,13 @@ interface SummaryRow extends BoardRow {
 }
 
 function toSummary(row: SummaryRow, role: Role): BoardSummary {
+  const settings = boardSettings(row);
   return {
     id: row.id,
     title: row.title,
     role,
+    perms: permsOf(role, settings),
+    settings,
     owner: { id: row.owner_id, name: row.owner_name, color: row.owner_color },
     linkAccess: row.link_access,
     pinned: !!row.pinned,
@@ -156,7 +285,7 @@ function toSummary(row: SummaryRow, role: Role): BoardSummary {
 }
 
 const SUMMARY_SQL = `
-  SELECT b.id, b.title, b.owner_id, b.link_access, b.nodes, b.thumb_at, b.created_at, b.updated_at, b.deleted_at,
+  SELECT b.id, b.title, b.owner_id, b.link_access, b.nodes, b.thumb_at, b.created_at, b.updated_at, b.deleted_at, b.settings,
          u.name AS owner_name, u.color AS owner_color, m.pinned AS pinned, m.opened_at AS opened_at, m.role AS m_role
   FROM boards b
   JOIN users u ON u.id = b.owner_id
@@ -174,7 +303,7 @@ export function boardSummary(boardId: string, user: UserRow): BoardSummary {
 
 export function listBoards(user: UserRow): BoardSummary[] {
   const rows = q(
-    `${SUMMARY_SQL} WHERE m.user_id IS NOT NULL AND b.deleted_at IS NULL
+    `${SUMMARY_SQL} WHERE m.user_id IS NOT NULL AND m.role != 'banned' AND b.deleted_at IS NULL
      ORDER BY m.pinned DESC, COALESCE(m.opened_at, b.updated_at) DESC LIMIT 500`,
   ).all(user.id) as unknown as SummaryRow[];
   const out: BoardSummary[] = [];
@@ -209,17 +338,36 @@ export function leaveBoard(boardId: string, userId: string): void {
 export function listMembers(board: BoardRow): Member[] {
   const rows = q(
     `SELECT u.id, u.name, u.color, m.role, m.opened_at FROM members m JOIN users u ON u.id = m.user_id
-     WHERE m.board_id = ? ORDER BY (m.role = 'owner') DESC, m.opened_at DESC`,
-  ).all(board.id) as unknown as { id: string; name: string; color: string; role: Role; opened_at: number | null }[];
+     WHERE m.board_id = ? ORDER BY (m.role = 'owner') DESC, (m.role = 'host') DESC, (m.role = 'banned') ASC, m.opened_at DESC`,
+  ).all(board.id) as unknown as { id: string; name: string; color: string; role: Role | "banned"; opened_at: number | null }[];
   return rows.map((r) => ({
     ...toRef(r),
-    role: r.id === board.owner_id ? "owner" : r.role,
+    role: r.id === board.owner_id ? "owner" : r.role === "banned" ? "viewer" : r.role,
+    banned: r.role === "banned" || undefined,
     openedAt: r.opened_at,
   }));
 }
 
-export function setMemberRole(boardId: string, userId: string, role: "editor" | "viewer"): void {
-  q("UPDATE members SET role = ? WHERE board_id = ? AND user_id = ? AND role != 'owner'").run(role, boardId, userId);
+/** Сменить роль участника. Хост меняет только тех, кто ниже хоста, и не выше редактора. */
+export function setMemberRole(board: BoardRow, actorRole: Role, userId: string, role: Exclude<Role, "owner"> | "banned"): void {
+  if (userId === board.owner_id) throw bad("Роль владельца не меняется");
+  const cur = memberRole(board.id, userId);
+  if (!cur) throw notFound("Такого участника нет");
+  if (actorRole !== "owner") {
+    if (cur === "host" || role === "host") throw forbidden("Хостов назначает только владелец");
+  }
+  q("UPDATE members SET role = ? WHERE board_id = ? AND user_id = ?").run(role, board.id, userId);
+}
+
+/** Передать доску другому участнику: прежний владелец становится хостом. */
+export function transferBoard(board: BoardRow, toUserId: string): void {
+  const cur = memberRole(board.id, toUserId);
+  if (!cur || cur === "banned") throw bad("Передать можно только участнику доски");
+  tx(() => {
+    q("UPDATE boards SET owner_id = ? WHERE id = ?").run(toUserId, board.id);
+    q("UPDATE members SET role = 'owner' WHERE board_id = ? AND user_id = ?").run(board.id, toUserId);
+    q("UPDATE members SET role = 'host' WHERE board_id = ? AND user_id = ?").run(board.id, board.owner_id);
+  });
 }
 
 export function setThumb(boardId: string, data: Uint8Array): number {

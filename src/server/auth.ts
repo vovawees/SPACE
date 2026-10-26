@@ -10,6 +10,7 @@ import type { Me, UserRef } from "../shared/types.ts";
 import { config } from "./config.ts";
 import { now, q } from "./db.ts";
 import { unauthorized } from "./http.ts";
+import { limitsOf, rankOf, usageOf } from "./ranks.ts";
 
 const scrypt = promisify(crypto.scrypt) as (
   pw: string | Buffer,
@@ -30,6 +31,8 @@ export interface UserRow {
   pass_hash: string | null;
   created_at: number;
   seen_at: number;
+  rank: string;
+  banned_at: number | null;
 }
 
 export type AppEnv = { Variables: { user: UserRow | null; sessionId: string | null } };
@@ -68,13 +71,14 @@ export function toRef(u: Pick<UserRow, "id" | "name" | "color">): UserRef {
 }
 
 export function toMe(u: UserRow): Me {
-  return { ...toRef(u), login: u.login, hasPassword: !!u.pass_hash, createdAt: u.created_at };
+  const rank = rankOf(u);
+  return { ...toRef(u), login: u.login, hasPassword: !!u.pass_hash, createdAt: u.created_at, rank, limits: limitsOf(rank), usage: usageOf(u.id) };
 }
 
-export function createUser(name: string, color: string): UserRow {
+export function createUser(name: string, color: string, rank = "member"): UserRow {
   const t = now();
   const id = randomId(9);
-  q("INSERT INTO users (id, name, color, created_at, seen_at) VALUES (?, ?, ?, ?, ?)").run(id, name, color, t, t);
+  q("INSERT INTO users (id, name, color, rank, created_at, seen_at) VALUES (?, ?, ?, ?, ?, ?)").run(id, name, color, rank, t, t);
   return getUser(id)!;
 }
 
@@ -107,7 +111,7 @@ export function userBySessionToken(token: string | undefined | null): { user: Us
   const row = q(
     "SELECT u.*, s.seen_at AS s_seen FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.id = ?",
   ).get(id) as (UserRow & { s_seen: number }) | undefined;
-  if (!row) return null;
+  if (!row || row.banned_at) return null;
   const t = now();
   if (t - row.s_seen > TOUCH_EVERY) {
     q("UPDATE sessions SET seen_at = ? WHERE id = ?").run(t, id);

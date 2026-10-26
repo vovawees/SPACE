@@ -9,7 +9,7 @@ import * as Y from "yjs";
 import { docTitle, nodesOf } from "../shared/doc.ts";
 import type { Role, UserRef } from "../shared/types.ts";
 import { toRef, userFromCookieHeader } from "./auth.ts";
-import { getBoard, loadState, roleOn, saveState, touchOpened } from "./boards.ts";
+import { boardSettings, getBoard, loadState, permsOf, roleOn, saveState, touchOpened } from "./boards.ts";
 import { finalSnapshot, maybeSnapshot, noteChange } from "./history.ts";
 import { join, leave } from "./presence.ts";
 
@@ -45,9 +45,15 @@ export const hocuspocus = new Hocuspocus<CollabContext>({
     if (!user) throw new Denied("unauthorized");
     const board = getBoard(documentName);
     if (!board) throw new Denied("not-found");
-    const role = roleOn(board, user, true);
+    let role: Role | null = null;
+    try {
+      role = roleOn(board, user, true);
+    } catch {
+      throw new Denied("full");
+    }
     if (!role) throw new Denied("forbidden");
-    connectionConfig.readOnly = role === "viewer";
+    // зритель, комментатор и все, кроме хостов, на замороженной доске — только чтение
+    connectionConfig.readOnly = !permsOf(role, boardSettings(board)).edit;
     touchOpened(board.id, user.id);
     return { user: toRef(user), role } satisfies CollabContext;
   },
@@ -106,4 +112,13 @@ export async function editDoc(boardId: string, user: UserRef, fn: (doc: Y.Doc) =
 
 export function kickAll(boardId: string): void {
   hocuspocus.closeConnections(boardId);
+}
+
+/** Отключить человека от всех досок (заблокирован или сменился ранг). */
+export function kickUser(userId: string): void {
+  for (const doc of hocuspocus.documents.values()) {
+    doc.getConnections().forEach((conn) => {
+      if ((conn.context as CollabContext | undefined)?.user?.id === userId) conn.close();
+    });
+  }
 }

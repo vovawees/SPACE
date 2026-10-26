@@ -91,7 +91,47 @@ db.exec(`
     data       TEXT NOT NULL,
     fetched_at INTEGER NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS invites (
+    code       TEXT PRIMARY KEY,
+    rank       TEXT NOT NULL,
+    uses       INTEGER NOT NULL DEFAULT 0,
+    max_uses   INTEGER,
+    expires_at INTEGER,
+    note       TEXT,
+    created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+    created_at INTEGER NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS board_links (
+    id         TEXT PRIMARY KEY,
+    board_id   TEXT NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
+    role       TEXT NOT NULL,
+    label      TEXT,
+    uses       INTEGER NOT NULL DEFAULT 0,
+    max_uses   INTEGER,
+    expires_at INTEGER,
+    created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS board_links_board ON board_links(board_id);
+  CREATE INDEX IF NOT EXISTS files_uploader ON files(uploader);
+  CREATE INDEX IF NOT EXISTS boards_owner ON boards(owner_id);
   `);
+
+/* Новые столбцы в старых базах: ALTER TABLE только если столбца ещё нет. */
+function addColumn(table: string, column: string, def: string) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  if (!cols.some((c) => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${def}`);
+}
+addColumn("users", "rank", "TEXT NOT NULL DEFAULT 'member'");
+addColumn("users", "banned_at", "INTEGER");
+addColumn("boards", "settings", "TEXT");
+/* Владелец сервера — самый первый аккаунт, если владельца ещё нет. */
+db.exec(`UPDATE users SET rank = 'owner' WHERE id = (SELECT id FROM users ORDER BY created_at LIMIT 1)
+         AND NOT EXISTS (SELECT 1 FROM users WHERE rank = 'owner')`);
 
 const statements = new Map<string, StatementSync>();
 
