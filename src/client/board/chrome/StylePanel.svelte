@@ -165,7 +165,12 @@
       el.style.top = "";
       el.style.maxHeight = "";
       el.dataset.shown = "";
-      return;
+      // лист закрывает низ экрана — подвинуть доску, чтобы объект остался виден над ним
+      const raf = requestAnimationFrame(() => {
+        const r = untrack(() => s.boundsOfIds(s.selection.ids));
+        if (r) b.camera.revealBand(r, 64, b.camera.vh - el.getBoundingClientRect().top + 8);
+      });
+      return () => cancelAnimationFrame(raf);
     }
     const anchor = { getBoundingClientRect: () => ({ x: at.x, y: at.y, left: at.x, top: at.y, right: at.x, bottom: at.y, width: 0, height: 0 }) };
     void computePosition(anchor, el, { placement: "bottom-start", strategy: "fixed", middleware: [

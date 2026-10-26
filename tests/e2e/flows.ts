@@ -184,7 +184,12 @@ try {
     return !!img && img.complete && img.naturalWidth === 640;
   }, null, { timeout: 8000 }).then(() => true, () => false);
   ok(loaded, "картинка загрузилась на сервер и показана");
-  ns = await nodes(a);
+  // адрес файла появляется после ответа сервера — показ локального превью может его опередить
+  ns = await until(
+    () => nodes(a),
+    (list) => list.some((n) => n.type === "image" && !n.props.pending && typeof n.props.src === "string"),
+    8000,
+  );
   const img = ns.find((n) => n.type === "image");
   ok(!!img && !img.props.pending && typeof img.props.src === "string", "у картинки есть адрес файла", String(img?.props.src).slice(0, 16));
 

@@ -99,6 +99,24 @@ export class Camera {
     if (dx || dy) this.go(this.x + dx, this.y + dy, this.z);
   }
 
+  /** То же для полосы экрана между верхом `top` и низом `bottom` (например, над листом снизу на телефоне). */
+  revealBand(r: Rect, top: number, bottom: number, pad = 16) {
+    const a = this.toScreen(r.x, r.y);
+    const c = this.toScreen(r.x + r.w, r.y + r.h);
+    const lo = top + pad;
+    const hi = this.vh - bottom - pad;
+    if (hi - lo < 40) return;
+    let dx = 0;
+    let dy = 0;
+    if (c.x - a.x > this.vw - pad * 2) dx = this.vw / 2 - (a.x + c.x) / 2;
+    else if (a.x < pad) dx = pad - a.x;
+    else if (c.x > this.vw - pad) dx = this.vw - pad - c.x;
+    if (c.y - a.y > hi - lo) dy = lo - a.y;
+    else if (a.y < lo) dy = lo - a.y;
+    else if (c.y > hi) dy = hi - c.y;
+    if (dx || dy) this.go(this.x + dx, this.y + dy, this.z);
+  }
+
   centerOn(p: Pt, animate = true) {
     this.go(this.vw / 2 - p.x * this.z, this.vh / 2 - p.y * this.z, this.z, animate);
   }
