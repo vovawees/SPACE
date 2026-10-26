@@ -1,5 +1,6 @@
 <script lang="ts">
   import ConfirmHost from "./ui/ConfirmHost.svelte";
+  import ColorPopover from "./ui/ColorPopover.svelte";
   import { router } from "./lib/router.svelte.ts";
   import { session } from "./lib/session.svelte.ts";
   import MenuHost from "./ui/MenuHost.svelte";
@@ -36,6 +37,7 @@
 {/if}
 
 <MenuHost />
+<ColorPopover />
 <ConfirmHost />
 <Toasts />
 

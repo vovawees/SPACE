@@ -11,7 +11,7 @@ import type { BoardPerms, BoardSummary, Role, UserRef } from "../../shared/types
 import { session } from "../lib/session.svelte.ts";
 import { Camera } from "./camera.svelte.ts";
 import type { Pt, Rect } from "./geometry.ts";
-import type { ColorName, Dash, Fill, Head, HeadSize, Route, ShapeKind, StrokeSize, TextSize } from "./model.ts";
+import type { Color, Dash, Fill, Head, HeadSize, Route, ShapeKind, StrokeSize, TextSize } from "./model.ts";
 import type { Interact } from "./interact.svelte.ts";
 import { Social } from "./social.svelte.ts";
 import { BoardStore, type NodeView } from "./store.svelte.ts";
@@ -45,7 +45,8 @@ export interface Peer {
 }
 
 export interface Style {
-  color: ColorName;
+  /** Имя цвета палитры или свой #rrggbb. */
+  color: Color;
   stroke: StrokeSize;
   fill: Fill;
   dash: Dash;

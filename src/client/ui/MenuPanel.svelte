@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { pickColor, recentColors } from "./colorpick.ts";
+  import { pickColor, recentColors } from "./colorpick.svelte.ts";
   import { computePosition, flip, offset, shift, size, type Placement, type VirtualElement } from "@floating-ui/dom";
   import ChevronRight from "@lucide/svelte/icons/chevron-right";
   import Check from "@lucide/svelte/icons/check";
@@ -178,7 +178,7 @@
               const pick = entry.pick;
               const cur = entry.current;
               onclose();
-              pickColor(cur, { x: r.left, y: r.bottom }, (hex) => pick?.(hex));
+              pickColor(cur, { x: r.left, y: r.bottom }, (hex) => pick?.(hex), { title: entry.label });
             }}
           ></button>
         {/if}

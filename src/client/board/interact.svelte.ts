@@ -16,7 +16,7 @@ import { BARBED, DEFAULT_BARBS, SIDE_N, fractionAt, magnetsOf, nearestOnOutline,
 import { boundsOf, center, containsPt, dist, expand, fromPoints, intersects, rotate, simplify, snapAngle, type Pt, type Rect } from "./geometry.ts";
 import { eraseHits, frameLabelHit, hitTest, insideNode, nodesInRect } from "./hit.ts";
 import { canvasMenu, linkEndMenu, nodeMenu, stickerMenu } from "./menus.ts";
-import { ASPECT_TYPES, TEXT_TYPES, defaults, type Binding, type ColorName, type Head, type NodeData, type NodeProps, type NodeType, type ShapeKind, type StrokeSize } from "./model.ts";
+import { ASPECT_TYPES, TEXT_TYPES, defaults, type Binding, type Color, type ColorName, type Head, type NodeData, type NodeProps, type NodeType, type ShapeKind, type StrokeSize } from "./model.ts";
 import { duplicate, place, withChildren } from "./ops.ts";
 import { recognize } from "./recognize.ts";
 import { inkPx } from "./shapes.ts";
@@ -56,7 +56,7 @@ interface Gesture {
 export interface InkDraft {
   /** Плоский массив мировых точек [x, y, нажим, …]. */
   pts: number[];
-  color: ColorName;
+  color: Color;
   size: StrokeSize;
   smart: boolean;
 }

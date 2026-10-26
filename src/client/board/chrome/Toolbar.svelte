@@ -25,6 +25,7 @@
   import { session } from "../../lib/session.svelte.ts";
   import { menu, type MenuEntry } from "../../ui/menu.svelte.ts";
   import { tip } from "../../ui/tooltip.ts";
+  import { pickColor } from "../../ui/colorpick.svelte.ts";
   import { useBoard, type Tool } from "../board.svelte.ts";
   import { addFiles } from "../files.ts";
   import { headGlyph } from "../connector.ts";
@@ -37,6 +38,8 @@
     SHAPE_LABELS,
     STROKE_PX,
     colorCss,
+    colorKey,
+    isHex,
     type ColorName,
     type Dash,
     type Fill,
@@ -194,6 +197,18 @@
             <span class="swatch" class:default={c === "default"} style:--sw={colorCss(c)}></span>
           </button>
         {/each}
+        <button
+          class="color"
+          class:on={isHex(st.color)}
+          aria-label="Свой цвет"
+          onclick={(e) => {
+            const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+            pickColor(st.color, { x: r.left, y: r.top }, (c) => (st.color = colorKey(c)), { title: "Цвет новых объектов" });
+          }}
+          {@attach tip("Свой цвет", undefined, "top")}
+        >
+          <span class="swatch custom" style:--sw={isHex(st.color) ? st.color : "transparent"}></span>
+        </button>
       </div>
       {#if b.tool === "text"}
         <div class="tb-sep"></div>
@@ -378,6 +393,11 @@
   }
   .color .swatch {
     transition: transform var(--t-fast) var(--ease-out);
+  }
+  .swatch.custom {
+    background:
+      radial-gradient(circle, var(--sw) 0 4.5px, transparent 5px),
+      conic-gradient(#f87171, #fbbf24, #4ade80, #22d3ee, #818cf8, #e879f9, #f87171);
   }
   .color.on .swatch {
     transform: scale(1.12);
