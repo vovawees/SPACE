@@ -1,0 +1,149 @@
+/* Плавающие панели вокруг холста. Без backdrop-filter: размытие под
+   панелью пересчитывается на каждом кадре прокрутки и съедает FPS. */
+
+.panel {
+  pointer-events: auto;
+  background: var(--panel);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-3);
+  box-shadow:
+    inset 0 1px 0 var(--panel-hi),
+    var(--shadow-2);
+  color: var(--ink);
+}
+
+.panel-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+}
+
+.tb-sep {
+  flex: none;
+  width: 1px;
+  height: 22px;
+  margin: 0 4px;
+  background: var(--line-2);
+}
+
+/* кнопка инструмента */
+.tool {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--r-2);
+  color: var(--ink-2);
+  transition:
+    background var(--t-fast),
+    color var(--t-fast);
+}
+.tool:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--ink);
+}
+.tool:active:not(:disabled) {
+  background: var(--press);
+}
+.tool.on {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.tool.on.locked::after {
+  content: "";
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.tool:disabled {
+  opacity: 0.35;
+}
+.tool .caret {
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  width: 12px;
+  height: 12px;
+  display: grid;
+  place-items: center;
+  color: var(--ink-3);
+  border-radius: 4px;
+}
+.tool .caret:hover {
+  color: var(--ink);
+  background: var(--hover);
+}
+
+/* маленькая кнопка в панели свойств */
+.chip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 7px;
+  border-radius: var(--r-1);
+  color: var(--ink-2);
+  font-size: 12.5px;
+  font-weight: 540;
+  white-space: nowrap;
+  transition:
+    background var(--t-fast),
+    color var(--t-fast);
+}
+.chip:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--ink);
+}
+.chip.on {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.chip.danger:hover {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+.chip:disabled {
+  opacity: 0.35;
+}
+
+/* кружок цвета */
+.swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--sw);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.18);
+  flex: none;
+}
+.swatch.default {
+  background: conic-gradient(var(--c-default) 0 50%, var(--card) 0);
+  box-shadow: inset 0 0 0 1.5px var(--line-3);
+}
+
+/* полоса толщины */
+.weight {
+  width: 16px;
+  border-radius: 99px;
+  background: currentColor;
+}
+
+@media (pointer: coarse) {
+  .tool {
+    width: 42px;
+    height: 42px;
+  }
+  .chip {
+    height: 34px;
+    min-width: 34px;
+  }
+}

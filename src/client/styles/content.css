@@ -1,0 +1,264 @@
+/* Содержимое узлов: Markdown, подсветка кода (классы tok-* — общие для
+   статической отрисовки и редактора), формулы. */
+
+.md {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+.md > :first-child {
+  margin-top: 0;
+}
+.md > :last-child {
+  margin-bottom: 0;
+}
+.md p,
+.md ul,
+.md ol,
+.md blockquote,
+.md pre,
+.md table,
+.md .math-block {
+  margin: 0 0 0.6em;
+}
+.md h1,
+.md h2,
+.md h3,
+.md h4,
+.md h5,
+.md h6 {
+  margin: 0.9em 0 0.35em;
+  line-height: 1.25;
+  font-weight: 650;
+  letter-spacing: -0.012em;
+  color: var(--hl-heading);
+}
+.md h1 {
+  font-size: 1.55em;
+  letter-spacing: -0.022em;
+}
+.md h2 {
+  font-size: 1.3em;
+}
+.md h3 {
+  font-size: 1.12em;
+}
+.md h4,
+.md h5,
+.md h6 {
+  font-size: 1em;
+}
+.md ul,
+.md ol {
+  padding-left: 1.35em;
+}
+.md li + li {
+  margin-top: 0.15em;
+}
+.md li > ul,
+.md li > ol {
+  margin: 0.15em 0 0;
+}
+.md li::marker {
+  color: var(--ink-3);
+}
+.md .task-item {
+  list-style: none;
+  margin-left: -1.35em;
+}
+.md .task-item > p {
+  margin: 0;
+}
+.md input.task {
+  appearance: none;
+  width: 1em;
+  height: 1em;
+  margin: 0 0.45em 0 0;
+  vertical-align: -0.14em;
+  border: 1.5px solid var(--ink-3);
+  border-radius: 0.28em;
+  display: inline-grid;
+  place-content: center;
+  cursor: pointer;
+  transition: background var(--t-fast), border-color var(--t-fast);
+}
+.md input.task:hover {
+  border-color: var(--ink-2);
+}
+.md input.task:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.md input.task:checked::after {
+  content: "";
+  width: 0.28em;
+  height: 0.52em;
+  border: solid var(--accent-ink);
+  border-width: 0 0.13em 0.13em 0;
+  transform: translateY(-0.06em) rotate(45deg);
+}
+.md .task-item.done {
+  color: var(--ink-3);
+}
+.md .task-item.done > p,
+.md .task-item.done {
+  text-decoration: line-through;
+  text-decoration-color: var(--ink-4);
+}
+.md .task-item.done ul,
+.md .task-item.done ol {
+  text-decoration: none;
+}
+.md a {
+  color: var(--hl-link);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in oklab, var(--hl-link) 40%, transparent);
+  text-underline-offset: 0.18em;
+}
+.md a:hover {
+  text-decoration-color: currentColor;
+}
+.md strong {
+  font-weight: 650;
+}
+.md em {
+  font-style: italic;
+}
+.md s {
+  color: var(--ink-3);
+}
+.md code {
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  padding: 0.1em 0.35em;
+  border-radius: 0.35em;
+  background: var(--press);
+}
+.md pre.md-code {
+  font-family: var(--font-mono);
+  font-size: 0.82em;
+  line-height: 1.55;
+  padding: 0.75em 0.9em;
+  border-radius: var(--r-2);
+  background: var(--code-bg);
+  border: 1px solid var(--line);
+  overflow-x: auto;
+  white-space: pre;
+}
+.md pre.md-code code {
+  padding: 0;
+  background: none;
+  font-size: inherit;
+}
+.md blockquote {
+  padding: 0.1em 0 0.1em 0.9em;
+  border-left: 3px solid var(--line-3);
+  color: var(--ink-2);
+}
+.md hr {
+  border: 0;
+  border-top: 1px solid var(--line-2);
+  margin: 0.9em 0;
+}
+.md table {
+  border-collapse: collapse;
+  font-size: 0.92em;
+  display: block;
+  overflow-x: auto;
+}
+.md th,
+.md td {
+  border: 1px solid var(--line-2);
+  padding: 0.3em 0.6em;
+  text-align: left;
+}
+.md th {
+  background: var(--hover);
+  font-weight: 600;
+}
+.md img {
+  max-width: 100%;
+  border-radius: var(--r-1);
+}
+.md .math-block {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.2em 0;
+}
+.math-pending {
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  color: var(--ink-3);
+}
+.math-error {
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  color: var(--danger);
+}
+.katex {
+  font-size: 1.08em;
+}
+
+/* ------------------------------ подсветка ------------------------------ */
+
+.tok-keyword,
+.tok-meta {
+  color: var(--hl-keyword);
+}
+.tok-string,
+.tok-inserted {
+  color: var(--hl-string);
+}
+.tok-string2 {
+  color: var(--hl-number);
+}
+.tok-number,
+.tok-bool,
+.tok-atom,
+.tok-literal {
+  color: var(--hl-number);
+}
+.tok-comment {
+  color: var(--hl-comment);
+  font-style: italic;
+}
+.tok-variableName.tok-definition,
+.tok-macroName {
+  color: var(--hl-fn);
+}
+.tok-typeName,
+.tok-className,
+.tok-namespace {
+  color: var(--hl-type);
+}
+.tok-propertyName {
+  color: var(--hl-prop);
+}
+.tok-propertyName.tok-definition {
+  color: var(--hl-fn);
+}
+.tok-variableName2,
+.tok-labelName {
+  color: var(--hl-tag);
+}
+.tok-operator,
+.tok-punctuation {
+  color: var(--hl-op);
+}
+.tok-heading {
+  color: var(--hl-heading);
+  font-weight: 650;
+}
+.tok-link,
+.tok-url {
+  color: var(--hl-link);
+}
+.tok-emphasis {
+  font-style: italic;
+}
+.tok-strong {
+  font-weight: 650;
+}
+.tok-deleted,
+.tok-invalid {
+  color: var(--danger);
+}

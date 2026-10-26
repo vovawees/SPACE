@@ -1,0 +1,1236 @@
+/* Доска: холст, слои, узлы. Узлы живут в «мире» (слой с transform
+   камеры), поэтому всё, что должно сохранять экранный размер (обводки
+   выделения, подписи рамок), умножается на --iz = 1 / масштаб. */
+
+.board {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: var(--bg);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  outline: none;
+  cursor: default;
+  contain: strict;
+}
+.board[data-cursor="grab"] {
+  cursor: grab;
+}
+.board[data-cursor="grabbing"],
+.board[data-cursor="grabbing"] * {
+  cursor: grabbing !important;
+}
+.board[data-cursor="crosshair"] {
+  cursor: crosshair;
+}
+.board[data-cursor="draw"] {
+  cursor:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Ccircle cx='12' cy='12' r='3' fill='%23fff' stroke='%23000' stroke-opacity='.55' stroke-width='1.5'/%3E%3C/svg%3E")
+      12 12,
+    crosshair;
+}
+.board[data-cursor="erase"] {
+  cursor:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Ccircle cx='12' cy='12' r='8' fill='%23fff' fill-opacity='.12' stroke='%23fff' stroke-width='1.5'/%3E%3Ccircle cx='12' cy='12' r='8' fill='none' stroke='%23000' stroke-opacity='.4' stroke-width='.75'/%3E%3C/svg%3E")
+      12 12,
+    crosshair;
+}
+.board[data-cursor="laser"] {
+  cursor:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Ccircle cx='12' cy='12' r='4' fill='%23ff5b4a'/%3E%3Ccircle cx='12' cy='12' r='7' fill='none' stroke='%23ff5b4a' stroke-opacity='.4' stroke-width='2'/%3E%3C/svg%3E")
+      12 12,
+    crosshair;
+}
+.board[data-cursor="text"] {
+  cursor: text;
+}
+
+/* Сетка: точки (по умолчанию), линии или крестики. Узел клетки — в центре
+   плитки фона: так все три вида совпадают с координатами мира. */
+.board .grid {
+  --dot: var(--bg-dot);
+  --r: 1.6px;
+  --arm: 2.5px;
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  will-change: transform;
+  background-size: var(--m) var(--m);
+  background-position: calc(var(--m) / 2) calc(var(--m) / 2);
+  background-image: radial-gradient(circle at center, var(--dot) 0, var(--dot) 1px, transparent var(--r));
+}
+.board .grid.major {
+  --dot: var(--bg-dot-strong);
+  --r: 1.7px;
+  --arm: 4px;
+}
+.board[data-grid="lines"] .grid,
+.board[data-grid="cross"] .grid {
+  background-image:
+    linear-gradient(to right, transparent calc(50% - 0.5px), var(--dot) calc(50% - 0.5px), var(--dot) calc(50% + 0.5px), transparent calc(50% + 0.5px)),
+    linear-gradient(to bottom, transparent calc(50% - 0.5px), var(--dot) calc(50% - 0.5px), var(--dot) calc(50% + 0.5px), transparent calc(50% + 0.5px));
+}
+.board[data-grid="lines"] .grid {
+  --dot: color-mix(in srgb, var(--bg-dot) 55%, transparent);
+}
+.board[data-grid="lines"] .grid.major {
+  --dot: color-mix(in srgb, var(--bg-dot-strong) 60%, transparent);
+}
+.board[data-grid="cross"] .grid {
+  -webkit-mask-image: radial-gradient(circle at center, #000 0, #000 var(--arm), transparent calc(var(--arm) + 0.5px));
+  mask-image: radial-gradient(circle at center, #000 0, #000 var(--arm), transparent calc(var(--arm) + 0.5px));
+  -webkit-mask-size: var(--m) var(--m);
+  mask-size: var(--m) var(--m);
+  -webkit-mask-position: calc(var(--m) / 2) calc(var(--m) / 2);
+  mask-position: calc(var(--m) / 2) calc(var(--m) / 2);
+}
+
+.scene-canvas,
+.glow-canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+}
+
+.world {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  transform-origin: 0 0;
+}
+.world.moving {
+  will-change: transform;
+}
+.world > .layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+/* ------------------------------- узлы ------------------------------- */
+
+.node {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 50% 50%;
+  contain: layout style;
+  color: var(--ink);
+}
+.node.dim {
+  opacity: 0.22;
+  transition: opacity 80ms;
+}
+.node.t-path,
+.node.t-ink {
+  pointer-events: none;
+  contain: none;
+}
+.node.t-path {
+  width: 0;
+  height: 0;
+}
+
+/* обводка выделенных при групповом выделении (одиночное рисует слой ручек) */
+.world.multi .node.sel:not(.t-path)::after,
+.node.hot::after,
+.node.remote::after {
+  content: "";
+  position: absolute;
+  inset: calc(-2px * var(--iz));
+  border: calc(1.5px * var(--iz)) solid var(--accent);
+  border-radius: calc(var(--r-3) + 2px * var(--iz));
+  pointer-events: none;
+}
+.node.hot::after {
+  border-width: calc(2px * var(--iz));
+  inset: calc(-4px * var(--iz));
+  box-shadow: 0 0 0 calc(4px * var(--iz)) var(--accent-soft);
+}
+.node.remote::after {
+  border-color: var(--peer);
+}
+.node.t-frame.hot::after {
+  border-style: dashed;
+  box-shadow: none;
+  background: color-mix(in oklab, var(--accent) 5%, transparent);
+}
+
+.card {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: var(--card);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-3);
+  box-shadow: var(--card-shadow);
+  overflow: hidden;
+}
+.node.fit > .card {
+  height: auto;
+}
+.node.tinted > .card {
+  background: color-mix(in oklab, var(--c) var(--tint), var(--card));
+  border-color: color-mix(in oklab, var(--c) var(--tint-line), transparent);
+}
+.node:not(.sel):not(.dim) > .card:hover {
+  border-color: var(--line-3);
+}
+.board.mid .card {
+  box-shadow: none;
+}
+.node.moving > .card {
+  box-shadow: var(--card-shadow-lift);
+}
+
+.scroll {
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-3) transparent;
+}
+.node.fit .scroll {
+  overflow: visible;
+}
+
+/* ------------------------------ заметка ------------------------------ */
+
+.note-body {
+  padding: 13px 16px 14px;
+  font-size: 15px;
+  line-height: 1.55;
+  min-height: 100%;
+  cursor: default;
+}
+.node:not(.fit) .note-body {
+  height: 100%;
+}
+.note-body.s {
+  font-size: 13px;
+}
+.note-body.l {
+  font-size: 19px;
+}
+.note-body.xl {
+  font-size: 26px;
+  line-height: 1.35;
+}
+.note-body .placeholder {
+  color: var(--ink-4);
+}
+.al-center {
+  text-align: center;
+}
+.al-right {
+  text-align: right;
+}
+
+/* ------------------------------- текст ------------------------------- */
+
+.text-body {
+  font-size: 24px;
+  line-height: 1.3;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  min-height: 1.3em;
+  padding: 2px 4px;
+  color: var(--ink);
+}
+.node.tinted .text-body {
+  color: var(--c);
+}
+.text-body.s {
+  font-size: 16px;
+  line-height: 1.45;
+  font-weight: 450;
+  letter-spacing: 0;
+}
+.text-body.l {
+  font-size: 36px;
+  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: -0.018em;
+}
+.text-body.xl {
+  font-size: 56px;
+  line-height: 1.1;
+  font-weight: 700;
+  letter-spacing: -0.028em;
+}
+.text-body .md h1,
+.text-body .md h2,
+.text-body .md h3 {
+  color: inherit;
+}
+
+/* -------------------------------- код -------------------------------- */
+
+.code-card {
+  background: var(--code-bg);
+  display: flex;
+  flex-direction: column;
+}
+.node.tinted > .code-card {
+  background: color-mix(in oklab, var(--c) 7%, var(--code-bg));
+}
+.code-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 34px;
+  padding: 0 6px 0 12px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.code-head .lang {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--ink-2);
+  padding: 3px 7px;
+  margin-left: -7px;
+  border-radius: var(--r-1);
+}
+.code-head .lang:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+.code-head .title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+.code-head .icon-btn {
+  width: 26px;
+  height: 26px;
+  color: var(--ink-3);
+}
+.code-head .icon-btn:hover {
+  color: var(--ink);
+}
+.board.mid .code-head .icon-btn {
+  visibility: hidden;
+}
+.code-head .icon-btn.run {
+  color: var(--c-green);
+}
+.code-head .icon-btn.run.on {
+  color: var(--danger);
+}
+.code-out {
+  flex: none;
+  max-height: 45%;
+  min-height: 56px;
+  border-top: 1px solid var(--line-2);
+  background: color-mix(in oklab, #000 28%, var(--code-bg));
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+  padding: 0 12px 8px;
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}
+.code-out-head {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 26px;
+  margin: 0 -4px 2px 0;
+  background: inherit;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.code-out-head .icon-btn {
+  width: 22px;
+  height: 22px;
+}
+.code-out-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.code-out-state i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--c-green);
+}
+.code-out-state.running i {
+  background: var(--accent);
+  animation: run-pulse 0.9s ease-in-out infinite alternate;
+}
+.code-out-state.error i {
+  background: var(--c-red);
+}
+.code-out-state.stopped i {
+  background: var(--c-yellow);
+}
+.code-out-state em {
+  font-style: normal;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+@keyframes run-pulse {
+  from {
+    opacity: 0.35;
+    scale: 0.8;
+  }
+  to {
+    opacity: 1;
+    scale: 1.15;
+  }
+}
+.code-line.result b {
+  font-weight: 400;
+  margin-right: 0.6ch;
+  opacity: 0.7;
+}
+.code-line {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  padding: 1px 0;
+  border-bottom: 1px solid var(--line);
+}
+.code-line:last-child {
+  border-bottom: 0;
+}
+.code-line.warn {
+  color: var(--c-yellow);
+}
+.code-line.error {
+  color: var(--c-red);
+}
+.code-line.info {
+  color: var(--c-cyan);
+}
+.code-line.result {
+  color: var(--c-violet);
+}
+.code-line.muted {
+  color: var(--ink-3);
+  border: 0;
+}
+.code-body {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 11px 14px 13px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre;
+  tab-size: 2;
+  color: var(--ink);
+  font-variant-ligatures: none;
+}
+.code-body.wrap {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.node.fit .code-body:not(.wrap) {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.code-body .cm-editor {
+  font-family: var(--font-mono);
+}
+.code-preview {
+  flex: 1;
+  min-height: 0;
+  padding: 14px 16px;
+  font-size: 15px;
+  line-height: 1.55;
+}
+.code-preview.frame {
+  padding: 0;
+  background: #fff;
+}
+.code-preview iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 240px;
+  border: 0;
+  background: #fff;
+}
+.node:not(.sel) .code-preview iframe,
+.board.busy .code-preview iframe {
+  pointer-events: none;
+}
+.code-preview.svg {
+  display: grid;
+  place-items: center;
+  background: repeating-conic-gradient(var(--hover) 0 25%, transparent 0 50%) 0 0 / 16px 16px;
+}
+.code-preview.svg img {
+  max-width: 100%;
+  max-height: 100%;
+}
+.code-preview.latex {
+  overflow-x: auto;
+  text-align: center;
+  font-size: 18px;
+}
+
+/* ------------------------- картинки и видео ------------------------- */
+
+.media {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--r-2);
+  overflow: hidden;
+  background: var(--surface-2);
+  box-shadow: var(--card-shadow);
+}
+.board.mid .media {
+  box-shadow: none;
+}
+.media > img,
+.media > video,
+.media > iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  object-fit: cover;
+  -webkit-user-drag: none;
+}
+.media > video {
+  object-fit: contain;
+  background: #000;
+}
+/* играющее видео не перехватывает первый щелчок — он выделяет узел */
+.node:not(.sel) .media > video,
+.node:not(.sel) .media > iframe,
+.board.busy .media > video,
+.board.busy .media > iframe {
+  pointer-events: none;
+}
+.media.loading::before,
+.card.loading::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 30%, var(--hover) 50%, transparent 70%) 0 0 / 300% 100%;
+  animation: shimmer 1.4s linear infinite;
+  pointer-events: none;
+}
+@keyframes shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+.media .badge {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px 4px 7px;
+  border-radius: var(--r-full);
+  background: rgb(0 0 0 / 0.55);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  backdrop-filter: blur(6px);
+  max-width: calc(100% - 20px);
+  pointer-events: none;
+}
+.media .badge span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.media .play {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgb(0 0 0 / 0.5);
+  color: #fff;
+  backdrop-filter: blur(6px);
+  transition:
+    transform var(--t-med) var(--ease-out),
+    background var(--t-fast);
+}
+.media .play:hover {
+  transform: scale(1.06);
+  background: rgb(0 0 0 / 0.68);
+}
+.media .title {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  padding: 12px 14px 28px;
+  color: #fff;
+  font-weight: 600;
+  font-size: 15px;
+  line-height: 1.3;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.5);
+  background: linear-gradient(rgb(0 0 0 / 0.55), transparent);
+  pointer-events: none;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.media .ph {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--ink-4);
+}
+.video-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  height: calc(30px * min(var(--iz), 1.6));
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 calc(4px * min(var(--iz), 1.6)) calc(4px * min(var(--iz), 1.6));
+  font-size: calc(12px * min(var(--iz), 1.6));
+  color: var(--ink-2);
+}
+.video-bar span {
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.video-bar button {
+  height: 100%;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-1);
+  color: var(--ink-2);
+}
+.video-bar button:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+/* ------------------------------- файлы ------------------------------- */
+
+.file-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 10px 12px 12px;
+}
+.file-icon {
+  flex: none;
+  width: 42px;
+  height: 42px;
+  border-radius: var(--r-2);
+  display: grid;
+  place-items: center;
+  background: color-mix(in oklab, var(--fc, var(--c-gray)) 16%, transparent);
+  color: var(--fc, var(--c-gray));
+}
+.file-main {
+  flex: 1;
+  min-width: 0;
+}
+.file-name {
+  font-size: 14px;
+  font-weight: 550;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-meta {
+  margin-top: 3px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.file-card .icon-btn,
+.shelf-head .icon-btn,
+.shelf-row .icon-btn {
+  width: 30px;
+  height: 30px;
+  color: var(--ink-3);
+  flex: none;
+}
+.file-card .icon-btn:hover,
+.shelf-head .icon-btn:hover,
+.shelf-row .icon-btn:hover {
+  color: var(--ink);
+}
+.file-audio {
+  padding: 0 10px 10px;
+}
+.file-audio audio {
+  width: 100%;
+  height: 36px;
+}
+.progress {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--accent);
+  transition: width 0.2s;
+}
+
+/* ------------------------------- полка ------------------------------- */
+
+.shelf-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 8px 9px 12px;
+}
+.shelf-head .file-icon {
+  width: 34px;
+  height: 34px;
+  --fc: var(--c-yellow);
+}
+.shelf-title {
+  flex: 1;
+  min-width: 0;
+}
+.shelf-title b {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.shelf-title small {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-3);
+}
+.shelf-list {
+  padding: 0 6px 6px;
+  max-height: 380px;
+}
+.node:not(.fit) .shelf-list {
+  max-height: none;
+}
+.shelf-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 36px;
+  padding: 0 2px 0 8px;
+  border-radius: var(--r-2);
+  font-size: 13px;
+  cursor: grab;
+  touch-action: none;
+}
+.shelf-row:hover {
+  background: var(--hover);
+}
+.shelf-row.dragging {
+  opacity: 0.4;
+}
+.shelf-row .nm {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.shelf-row .sz {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-3);
+  flex: none;
+}
+.shelf-row svg {
+  flex: none;
+}
+.shelf-empty {
+  padding: 4px 14px 14px;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+.shelf-ghost {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: var(--z-pop);
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: var(--r-2);
+  background: var(--surface-2);
+  border: 1px solid var(--line-2);
+  box-shadow: var(--shadow-2);
+  font-size: 13px;
+  color: var(--ink);
+}
+.rename {
+  font: inherit;
+  color: inherit;
+  background: var(--surface-1);
+  border: 1px solid var(--accent-line);
+  border-radius: var(--r-1);
+  padding: 1px 6px;
+  margin: -2px -7px;
+  outline: none;
+  min-width: 80px;
+  width: 100%;
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* ------------------------------ ссылки ------------------------------ */
+
+.link-cover {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1.91;
+  max-height: 190px;
+  object-fit: cover;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line);
+}
+.link-main {
+  padding: 12px 14px 13px;
+}
+.link-title {
+  font-size: 14.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.link-desc {
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.link-site {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 9px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-3);
+  min-width: 0;
+}
+.link-site img,
+.link-site .fav {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  flex: none;
+}
+.link-site span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.link-site .fav.brand {
+  display: grid;
+  place-items: center;
+  overflow: visible;
+  color: var(--ink-2);
+}
+.link-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 8px;
+}
+.link-facts span {
+  padding: 2px 7px;
+  border-radius: 99px;
+  background: var(--surface-3);
+  color: var(--ink-2);
+  font-size: 11.5px;
+  font-weight: 560;
+  line-height: 1.5;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.link-facts span.state {
+  color: #fff;
+  background: var(--c-green);
+}
+.link-facts span.state[data-s="Закрыт"] {
+  background: var(--c-red);
+}
+.link-facts span.state[data-s="Влит"] {
+  background: var(--c-violet);
+}
+.link-live {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.link-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 6px 0 12px;
+  border-bottom: 1px solid var(--line);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+.link-bar span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.link-bar .icon-btn {
+  width: 26px;
+  height: 26px;
+}
+.link-live iframe {
+  flex: 1;
+  width: 100%;
+  min-height: 420px;
+  border: 0;
+  background: #fff;
+}
+.node.fit .link-live iframe {
+  height: 460px;
+}
+.link-live.embed iframe {
+  min-height: 0;
+  background: var(--surface-1);
+}
+/* высота плеера ровно та, что нужна сервису: карточка растёт под него */
+.node.fit .link-live.embed iframe {
+  flex: none;
+}
+.link-bar .fav.brand {
+  display: inline-flex;
+  flex: none;
+}
+.node:not(.sel) .link-live iframe,
+.board.busy .link-live iframe {
+  pointer-events: none;
+}
+
+/* ------------------------------- рамки ------------------------------- */
+
+.frame-body {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-3);
+  background: color-mix(in oklab, var(--c) 5%, transparent);
+  border: 1px solid color-mix(in oklab, var(--c) 18%, transparent);
+}
+.node.tinted .frame-body {
+  background: color-mix(in oklab, var(--c) 8%, transparent);
+  border-color: color-mix(in oklab, var(--c) 35%, transparent);
+}
+.frame-label {
+  position: absolute;
+  left: 0;
+  bottom: 100%;
+  max-width: 100%;
+  padding: 0 calc(2px * var(--iz)) calc(6px * var(--iz));
+  font-size: calc(12.5px * var(--iz));
+  line-height: 1.3;
+  font-weight: 550;
+  color: var(--ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.node.tinted .frame-label {
+  color: color-mix(in oklab, var(--c) 75%, var(--ink));
+}
+.node.sel .frame-label {
+  color: var(--accent);
+}
+.frame-label .rename {
+  font-size: inherit;
+  padding: 0 calc(5px * var(--iz));
+  border-width: calc(1px * var(--iz));
+  border-radius: calc(5px * var(--iz));
+  margin: 0;
+  min-width: calc(120px * var(--iz));
+  box-shadow: none;
+}
+
+/* ------------------------------ фигуры ------------------------------ */
+
+.shape-svg,
+.ink-svg {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+}
+.shape-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 10px 14px;
+  font-size: 16px;
+  line-height: 1.35;
+  font-weight: 500;
+  overflow: hidden;
+}
+.shape-label.s {
+  font-size: 13px;
+}
+.shape-label.l {
+  font-size: 22px;
+}
+.shape-label.xl {
+  font-size: 32px;
+  font-weight: 650;
+}
+.shape-label > * {
+  max-width: 100%;
+  max-height: 100%;
+}
+.shape-label.solid {
+  color: var(--solid-ink);
+}
+.shape-label .cm-editor {
+  min-width: 2em;
+}
+.shape-label .cm-content {
+  text-align: center;
+}
+
+/* ------------------------------- линии ------------------------------- */
+
+.path-svg {
+  position: absolute;
+  overflow: visible;
+  pointer-events: none;
+}
+.path-svg .hit {
+  fill: none;
+  stroke: transparent;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: stroke;
+  stroke-width: max(calc(var(--sw) * 1px + 10px), calc(14px * var(--iz)));
+}
+.path-svg .line {
+  fill: none;
+  stroke: var(--c);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.path-svg .head {
+  stroke: var(--c);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+.path-svg .head.fill {
+  fill: var(--c);
+}
+.path-svg .head.hollow {
+  fill: var(--bg);
+}
+.path-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  translate: -50% -50%;
+  max-width: 260px;
+  min-width: 1.5em;
+  padding: 2px 7px;
+  border-radius: 7px;
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.3;
+  font-weight: 500;
+  text-align: center;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  pointer-events: auto;
+  cursor: grab;
+}
+.path-label.m {
+  font-size: 17px;
+}
+.path-label.l {
+  font-size: 23px;
+}
+.path-label.xl {
+  font-size: 32px;
+  font-weight: 650;
+}
+.path-label.editing {
+  cursor: text;
+  min-width: 5em;
+  box-shadow: 0 0 0 calc(1.5px * var(--iz)) var(--accent);
+}
+.path-label .md > :first-child {
+  margin-top: 0;
+}
+.path-label .md > :last-child {
+  margin-bottom: 0;
+}
+.path-label .cm-content {
+  text-align: center;
+}
+.path-svg .glow {
+  fill: none;
+  stroke: var(--accent);
+  opacity: 0.35;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: calc(var(--sw) * 1px + 6px * var(--iz));
+}
+.ink-svg path {
+  fill: var(--c);
+  pointer-events: visiblePainted;
+}
+.ink-svg path.hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: calc(10px * var(--iz));
+  stroke-linejoin: round;
+  pointer-events: stroke;
+}
+.node.t-ink.sel .ink-svg path:not(.hit) {
+  filter: drop-shadow(0 0 calc(1.5px * var(--iz)) var(--accent));
+}
+
+/* --------------------------- эффекты мира --------------------------- */
+
+.fx {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+.fx .preview {
+  fill: color-mix(in oklab, var(--c) var(--tint), transparent);
+  stroke: var(--c);
+}
+.fx .preview.frame {
+  fill: color-mix(in oklab, var(--accent) 5%, transparent);
+  stroke: var(--accent);
+  stroke-dasharray: 6 5;
+}
+.fx .laser {
+  fill: none;
+  stroke: #ff5b4a;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 4px rgb(255 91 74 / 0.9));
+}
+.fx .peer-sel {
+  fill: none;
+  stroke-width: 1.5px;
+  rx: 6px;
+}
+
+/* ------------------------------ editor ------------------------------ */
+
+.editor-host {
+  min-height: 1lh;
+  cursor: text;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.editor-host .cm-scroller {
+  line-height: inherit;
+}
+.editor-host .cm-content {
+  font-family: inherit;
+}
+.editor-raw {
+  white-space: pre-wrap;
+  margin: 0;
+  font: inherit;
+}
+.note-body .cm-content .tok-heading {
+  font-size: 1.08em;
+}
+
+.node.t-frame {
+  pointer-events: none;
+}
+.node.t-frame .frame-label {
+  pointer-events: auto;
+  cursor: default;
+}
+
+/* шрифт узла (свойство font) — коду и подписям интерфейса не передаётся */
+.node.f-serif {
+  font-family: var(--font-serif);
+}
+.node.f-mono {
+  font-family: var(--font-mono);
+}
+.node.f-hand {
+  font-family: var(--font-hand);
+  font-size-adjust: 0.56;
+}
+.node.f-serif :is(button, input, .chip),
+.node.f-mono :is(button, input, .chip),
+.node.f-hand :is(button, input, .chip) {
+  font-family: var(--font-ui);
+  font-size-adjust: none;
+}
