@@ -10,6 +10,7 @@
   import Search from "@lucide/svelte/icons/search";
   import Shapes from "@lucide/svelte/icons/shapes";
   import SmilePlus from "@lucide/svelte/icons/smile-plus";
+  import Zap from "@lucide/svelte/icons/zap";
   import X from "@lucide/svelte/icons/x";
   import type { Component } from "svelte";
   import { cubicOut } from "svelte/easing";
@@ -25,7 +26,7 @@
   import { pickFiles } from "../menus.ts";
 
   type Icon = Component<Record<string, unknown>>;
-  const ICONS: Record<LibCat, Icon> = { basic: Boxes, shapes: Shapes, stickers: SmilePlus, templates: LayoutTemplate, services: Plug };
+  const ICONS: Record<LibCat, Icon> = { basic: Boxes, widgets: Zap, shapes: Shapes, stickers: SmilePlus, templates: LayoutTemplate, services: Plug };
 
   const b = useBoard();
   const st = session.settings;
@@ -302,7 +303,8 @@
     display: grid;
     gap: 6px;
   }
-  .lib-grid.basic {
+  .lib-grid.basic,
+  .lib-grid.widgets {
     grid-template-columns: repeat(3, 1fr);
   }
   .lib-grid.shapes {

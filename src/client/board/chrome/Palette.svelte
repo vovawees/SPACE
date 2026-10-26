@@ -54,6 +54,19 @@
   import Undo2 from "@lucide/svelte/icons/undo-2";
   import WandSparkles from "@lucide/svelte/icons/wand-sparkles";
   import ZoomIn from "@lucide/svelte/icons/zoom-in";
+  import MousePointerClick from "@lucide/svelte/icons/mouse-pointer-click";
+  import ToggleRight from "@lucide/svelte/icons/toggle-right";
+  import SlidersHorizontal from "@lucide/svelte/icons/sliders-horizontal";
+  import Star from "@lucide/svelte/icons/star";
+  import Clock from "@lucide/svelte/icons/clock";
+  import Hourglass from "@lucide/svelte/icons/hourglass";
+  import ChartColumn from "@lucide/svelte/icons/chart-column";
+  import QrCode from "@lucide/svelte/icons/qr-code";
+  import FerrisWheel from "@lucide/svelte/icons/ferris-wheel";
+  import CircleDot from "@lucide/svelte/icons/circle-dot";
+  import CalendarCheck from "@lucide/svelte/icons/calendar-check";
+  import Sigma from "@lucide/svelte/icons/sigma";
+  import Cpu from "@lucide/svelte/icons/cpu";
   import type { Component } from "svelte";
   import { onMount } from "svelte";
   import type { BoardSummary } from "../../../shared/types.ts";
@@ -265,6 +278,19 @@
     dice: Dices,
     progress: Gauge,
     comment: MessageSquareText,
+    button: MousePointerClick,
+    switch: ToggleRight,
+    slider: SlidersHorizontal,
+    rating: Star,
+    clock: Clock,
+    countdown: Hourglass,
+    chart: ChartColumn,
+    qr: QrCode,
+    wheel: FerrisWheel,
+    status: CircleDot,
+    tracker: CalendarCheck,
+    calc: Sigma,
+    gate: Cpu,
   };
 
   function textOf(v: NodeView): string {
@@ -288,7 +314,25 @@
       case "timer":
       case "counter":
       case "progress":
+      case "button":
+      case "switch":
+      case "slider":
+      case "rating":
+      case "countdown":
+      case "tracker":
+      case "calc":
+      case "gate":
         return p.title ?? "";
+      case "clock":
+        return [p.title, p.tz].filter(Boolean).join(" · ");
+      case "chart":
+        return [p.title, ...(p.data ?? []).map((d) => d.l)].filter(Boolean).join(" · ");
+      case "qr":
+        return [p.title, p.url].filter(Boolean).join(" · ");
+      case "wheel":
+        return [p.title, ...(p.opts ?? []).map((o) => o.t)].filter(Boolean).join(" · ");
+      case "status":
+        return [p.title, ...(p.sts ?? []).map((o) => o.t)].filter(Boolean).join(" · ");
       case "dice":
         return "кубики";
       case "comment":

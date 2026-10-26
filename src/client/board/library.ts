@@ -28,13 +28,29 @@ import MessageSquarePlus from "@lucide/svelte/icons/message-square-plus";
 import Type from "@lucide/svelte/icons/type";
 import Upload from "@lucide/svelte/icons/upload";
 import Vote from "@lucide/svelte/icons/vote";
+import MousePointerClick from "@lucide/svelte/icons/mouse-pointer-click";
+import ToggleRight from "@lucide/svelte/icons/toggle-right";
+import SlidersHorizontal from "@lucide/svelte/icons/sliders-horizontal";
+import Star from "@lucide/svelte/icons/star";
+import Clock from "@lucide/svelte/icons/clock";
+import Hourglass from "@lucide/svelte/icons/hourglass";
+import ChartColumn from "@lucide/svelte/icons/chart-column";
+import ChartPie from "@lucide/svelte/icons/chart-pie";
+import QrCode from "@lucide/svelte/icons/qr-code";
+import FerrisWheel from "@lucide/svelte/icons/ferris-wheel";
+import CircleDot from "@lucide/svelte/icons/circle-dot";
+import CalendarCheck from "@lucide/svelte/icons/calendar-check";
+import Sigma from "@lucide/svelte/icons/sigma";
+import Cpu from "@lucide/svelte/icons/cpu";
+import Globe from "@lucide/svelte/icons/globe";
 
 export const LIB_MIME = "application/x-space-lib";
 
-export type LibCat = "basic" | "shapes" | "stickers" | "templates" | "services";
+export type LibCat = "basic" | "widgets" | "shapes" | "stickers" | "templates" | "services";
 
 export const LIB_CATS: { id: LibCat; label: string }[] = [
   { id: "basic", label: "Объекты" },
+  { id: "widgets", label: "Виджеты и логика" },
   { id: "shapes", label: "Фигуры" },
   { id: "stickers", label: "Стикеры" },
   { id: "templates", label: "Шаблоны" },
@@ -67,6 +83,12 @@ export const EMOJI_GROUPS: { name: string; list: string[] }[] = [
   { name: "Игры", list: ["🎮", "🕹️", "🎲", "♟️", "🃏", "🏆", "🥇", "🎯", "⚔️", "🛡️", "🏹", "🧙", "🐉", "👾", "🗺️", "🏰", "💎", "💰", "🧪", "💣", "👑", "🧩", "🪄", "🎧"] },
   { name: "Работа", list: ["💡", "📅", "⏰", "📈", "📉", "🛠️", "🐛", "📦", "💬", "📎", "🔗", "📝", "🎨", "🧠", "🚀", "🎬"] },
   { name: "Еда и отдых", list: ["🍕", "🍔", "🍿", "☕", "🍺", "🥤", "🍰", "🌮", "🏖️", "⛺", "🎤", "🎸"] },
+  { name: "Лица", list: ["😀", "😁", "😅", "🥲", "😍", "🤩", "😎", "🥳", "😴", "🤯", "🥶", "🥵", "🤠", "😇", "🤓", "🙃", "😬", "🫠", "😱", "🤡", "👻", "💀", "🤖", "👽"] },
+  { name: "Жесты", list: ["👋", "✌️", "🤞", "👌", "🤙", "💪", "🫶", "🙌", "👆", "👇", "👉", "👈", "✋", "🤟", "🫡", "🤌"] },
+  { name: "Животные", list: ["🐶", "🐱", "🦊", "🐻", "🐼", "🐨", "🐯", "🦁", "🐸", "🐵", "🐧", "🦄", "🐝", "🦋", "🐢", "🐙", "🦖", "🐳", "🦉", "🐌", "🦀", "🐞", "🐺", "🦥"] },
+  { name: "Природа", list: ["☀️", "🌙", "🌟", "☁️", "🌈", "⚡", "❄️", "🌊", "🌸", "🌻", "🌲", "🍀", "🍁", "🌵", "💧", "🌍"] },
+  { name: "Символы", list: ["➡️", "⬅️", "⬆️", "⬇️", "↔️", "🔁", "➕", "➖", "✖️", "➗", "💲", "♻️", "⚙️", "🔔", "🔑", "🏷️", "📍", "🎵", "✔️", "🔺", "🔻", "💠", "🔶", "🔷"] },
+  { name: "Флаги", list: ["🏳️", "🏴", "🚩", "🏁", "🏳️‍🌈", "🇷🇺", "🇺🇦", "🇧🇾", "🇰🇿", "🇺🇸", "🇬🇧", "🇩🇪", "🇫🇷", "🇯🇵", "🇨🇳", "🇪🇺"] },
 ];
 
 const BASIC: LibItem[] = [
@@ -86,6 +108,24 @@ const BASIC: LibItem[] = [
   { id: "shelf", cat: "basic", label: "Полка", words: "файлы папка архив", icon: Package },
   { id: "upload", cat: "basic", label: "Файлы…", words: "картинка видео музыка документ загрузить", icon: Upload, ask: "file" },
   { id: "audio", cat: "basic", label: "Музыка…", words: "звук аудио песня mp3", icon: Music, ask: "file" },
+];
+
+const WIDGETS: LibItem[] = [
+  { id: "button", cat: "widgets", label: "Кнопка", words: "нажать действие клик ссылка переход логика", desc: "Нажимает любой; через стрелку — действие", icon: MousePointerClick },
+  { id: "switch", cat: "widgets", label: "Переключатель", words: "вкл выкл тумблер флажок логика", icon: ToggleRight },
+  { id: "slider", cat: "widgets", label: "Ползунок", words: "значение шкала диапазон бюджет громкость", icon: SlidersHorizontal },
+  { id: "rating", cat: "widgets", label: "Оценка", words: "звёзды рейтинг лайк сердечки отзыв голос", icon: Star },
+  { id: "status", cat: "widgets", label: "Статус", words: "этап состояние в работе готово метка", icon: CircleDot },
+  { id: "tracker", cat: "widgets", label: "Трекер", words: "привычки дни недели отметки серия чек квест этапы", icon: CalendarCheck },
+  { id: "wheel", cat: "widgets", label: "Колесо фортуны", words: "рулетка случай выбор жребий кто первый игра", icon: FerrisWheel },
+  { id: "clock", cat: "widgets", label: "Часы", words: "время пояс город мировые часы", icon: Clock },
+  { id: "clocks", cat: "widgets", label: "Мировые часы", words: "время пояса города команда москва лондон нью-йорк", icon: Globe },
+  { id: "countdown", cat: "widgets", label: "Отсчёт до даты", words: "обратный отсчёт дедлайн событие дата праздник", icon: Hourglass },
+  { id: "chart", cat: "widgets", label: "Диаграмма", words: "график столбцы данные статистика bar chart", icon: ChartColumn },
+  { id: "pie", cat: "widgets", label: "Круговая", words: "диаграмма круг доли pie donut кольцо", icon: ChartPie },
+  { id: "calc", cat: "widgets", label: "Вычисление", words: "сумма среднее формула итог калькулятор логика", icon: Sigma },
+  { id: "gate", cat: "widgets", label: "Логический блок", words: "и или не условие логика все любой gate", icon: Cpu },
+  { id: "qr", cat: "widgets", label: "QR-код", words: "qr код ссылка телефон сканировать", icon: QrCode },
 ];
 
 const SHAPES: LibItem[] = SHAPE_KINDS.map((k) => ({ id: `shape:${k}`, cat: "shapes" as const, label: SHAPE_LABELS[k], words: "фигура блок-схема", svg: shapeGlyph(k, 26, 1.6) }));
@@ -113,7 +153,7 @@ const SERVICES: LibItem[] = (
   ] as const
 ).map(([id, label, desc, url]) => ({ id: `svc:${id}`, cat: "services" as const, label, desc, url, svg: brandSvg(id, 22), words: "ссылка интеграция встроить " + id, ask: "url" as const }));
 
-export const LIB_ITEMS: LibItem[] = [...BASIC, ...SHAPES, ...STICKERS, ...TPL, ...SERVICES];
+export const LIB_ITEMS: LibItem[] = [...BASIC, ...WIDGETS, ...SHAPES, ...STICKERS, ...TPL, ...SERVICES];
 
 export function libItem(id: string): LibItem | undefined {
   return LIB_ITEMS.find((i) => i.id === id);
@@ -231,6 +271,36 @@ export function insertLib(b: Board, id: string, at: Pt, opts: { drop?: boolean }
       return mk("frame");
     case "shelf":
       return mk("shelf");
+    case "button":
+    case "switch":
+    case "slider":
+    case "rating":
+    case "status":
+    case "tracker":
+    case "wheel":
+    case "clock":
+    case "countdown":
+    case "chart":
+    case "calc":
+    case "gate":
+      return { ...mk(id), edit: undefined };
+    case "pie":
+      return mk("chart", { ct: "donut", w: 360, h: 240 });
+    case "qr":
+      return mk("qr", { url: location.origin + location.pathname });
+    case "clocks": {
+      const zones: [string, string][] = [
+        ["", ""],
+        ["Europe/London", ""],
+        ["America/New_York", ""],
+      ];
+      const w = 200;
+      const p0 = opts.drop ? at : freeSpot(b, at, w * 3 + 24, 120);
+      const ids = zones.map(([tz], i) => place(b, "clock", { x: p0.x + (i - 1) * (w + 12), y: p0.y }, { tz: tz || undefined, w, h: 120 }));
+      s.selection.set(ids);
+      if (!opts.drop) b.camera.reveal({ x: p0.x - w * 1.5 - 12, y: p0.y - 60, w: w * 3 + 24, h: 120 });
+      return { ids };
+    }
   }
   return null;
 }

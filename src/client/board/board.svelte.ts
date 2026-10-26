@@ -13,6 +13,7 @@ import { Camera } from "./camera.svelte.ts";
 import type { Pt, Rect } from "./geometry.ts";
 import type { Color, Dash, Fill, Head, HeadSize, Route, ShapeKind, StrokeSize, TextSize } from "./model.ts";
 import type { Interact } from "./interact.svelte.ts";
+import { Logic } from "./logic.svelte.ts";
 import { Social } from "./social.svelte.ts";
 import { BoardStore, type NodeView } from "./store.svelte.ts";
 
@@ -124,6 +125,9 @@ export class Board {
 
   /** Открытые панели. */
   ui = $state({
+    /** Панель оформления / логики у кнопки панели свойств. */
+    style: null as { x: number; y: number } | null,
+    logic: null as { x: number; y: number; id: string } | null,
     chat: false,
     palette: false,
     search: false,
@@ -167,12 +171,15 @@ export class Board {
   private pendingAwareness: Record<string, unknown> = {};
   /** Чат, реакции, сообщения у курсора. */
   readonly social: Social;
+  /** Правила на стрелках: «когда — тогда». */
+  readonly logic: Logic;
 
   constructor(id: string) {
     this.id = id;
     const me = session.me!;
     this.store = new BoardStore(this.doc, { id: me.id, name: me.name, color: me.color });
     this.social = new Social(this);
+    this.logic = new Logic(this);
     this.local = new IndexeddbPersistence(`space:${id}`, this.doc);
     void this.local.whenSynced.then(() => (this.localReady = true));
 
@@ -310,6 +317,7 @@ export class Board {
   destroy() {
     clearTimeout(this.awarenessTimer);
     runs.stopAll();
+    this.logic.destroy();
     this.social.destroy();
     this.provider.destroy();
     void this.local.destroy();

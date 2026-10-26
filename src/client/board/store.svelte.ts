@@ -18,6 +18,10 @@ import { isFit, TEXT_TYPES, type Binding, type NodeData, type NodeProps, type No
 export const LOCAL = Symbol("local");
 /** Локальные служебные правки (замеры высоты, превью ссылок): без отмены. */
 export const QUIET = Symbol("quiet");
+/** Правки, сделанные логикой в ответ на действие человека: отменяются вместе с ним. */
+export const LOGIC = Symbol("logic");
+/** Логика подтягивает итог после чужой правки: без отмены и без цепочек. */
+export const LOGIC_SYNC = Symbol("logic-sync");
 
 const GEO = new Set(["x", "y", "w", "h", "r", "z", "parent", "type", "text"]);
 
@@ -198,6 +202,8 @@ export class BoardStore {
   editing = $state<string | null>(null);
   /** Счётчик изменений состава (для подписчиков вроде мини-карты). */
   rev = $state(0);
+  /** Меняется, когда стрелки привязываются к узлам или отвязываются от них. */
+  bindRev = $state(0);
 
   private orderDirty = false;
   /** Обратный индекс привязок: id цели → id линий. */
@@ -219,7 +225,7 @@ export class BoardStore {
     this.nodes.observeDeep(this.onDeep);
 
     this.undo = new Y.UndoManager([this.nodes, this.meta], {
-      trackedOrigins: new Set([LOCAL]),
+      trackedOrigins: new Set([LOCAL, LOGIC]),
       captureTimeout: 500,
     });
     const sync = () => {
@@ -263,6 +269,7 @@ export class BoardStore {
 
   private indexBindings(v: NodeView) {
     if (v.type !== "path") return;
+    if (v.props.b0 || v.props.b1) this.bindRev++;
     for (const b of [v.props.b0, v.props.b1]) {
       if (!b) continue;
       let set = this.bindings.get(b.id);
@@ -272,7 +279,9 @@ export class BoardStore {
   }
 
   private unindexBindings(v: NodeView) {
-    for (const set of this.bindings.values()) set.delete(v.id);
+    let hit = false;
+    for (const set of this.bindings.values()) if (set.delete(v.id)) hit = true;
+    if (hit) this.bindRev++;
   }
 
   private onDeep = (events: Y.YEvent<Y.AbstractType<unknown>>[]) => {

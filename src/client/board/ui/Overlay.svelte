@@ -10,7 +10,7 @@
   import { BARBED, SIDES } from "../connector.ts";
   import { dist, intersects, type Pt } from "../geometry.ts";
   import { CONNECTABLE } from "../interact.svelte.ts";
-  import { ASPECT_TYPES, type NodeType } from "../model.ts";
+  import { ASPECT_TYPES, WIDGET_TYPES, type NodeType } from "../model.ts";
 
   const b = useBoard();
   const cam = b.camera;
@@ -21,7 +21,7 @@
   const idle = $derived(ix.kind === null || ix.kind === "press");
   const canEdit = $derived(!b.readonly && (b.tool === "select" || b.tool === "hand") && !b.spaceDown);
 
-  const ROTATABLE = new Set<NodeType>(["note", "text", "code", "image", "video", "file", "shelf", "link", "shape", "ink", "sticker", "table", "task", "poll", "timer", "audio", "counter", "dice", "progress"]);
+  const ROTATABLE = new Set<NodeType>(["note", "text", "code", "image", "video", "file", "shelf", "link", "shape", "ink", "sticker", "table", "task", "poll", "timer", "audio", "counter", "dice", "progress", ...WIDGET_TYPES]);
   const toS = (p: Pt) => cam.toScreen(p.x, p.y);
 
   const box = $derived.by(() => {

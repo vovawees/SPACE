@@ -13,7 +13,7 @@ import { rollDice } from "./nodes/games.ts";
 import { duplicate, removeSelected, tidy, withChildren, wrapInFrame, zoomToFit, zoomToSelection } from "./ops.ts";
 import type { Side } from "./connector.ts";
 import { CONNECTABLE } from "./interact.svelte.ts";
-import { TEXT_TYPES, type ShapeKind } from "./model.ts";
+import { TEXT_TYPES, TITLED_TYPES, WIDGET_EDIT_TYPES, type ShapeKind } from "./model.ts";
 
 const TOOL_KEYS: Record<string, Tool> = {
   KeyV: "select",
@@ -205,7 +205,9 @@ export function attachKeys(b: Board): () => void {
         if (shift && v.type === "code" && RUN_LANGS.has(v.props.lang ?? "")) runs.run(v.id, v.textValue);
         else if (TEXT_TYPES.has(v.type)) ix.edit(v.id, "end");
         else if (v.type === "table") ix.edit(v.id, "end");
-        else if (v.type === "frame" || v.type === "shelf" || v.type === "timer" || v.type === "counter" || v.type === "progress") ix.renaming = v.id;
+        else if (v.type === "frame" || v.type === "shelf" || TITLED_TYPES.has(v.type)) {
+          if (!b.readonly) ix.renaming = v.id;
+        } else if (WIDGET_EDIT_TYPES.has(v.type)) ix.edit(v.id, "end");
         else if (v.type === "dice") rollDice(b, [v.id]);
         else if (v.type === "image") b.ui.viewer = v.id;
         else if (v.type === "link" || v.type === "video") ix.activate(v.id);

@@ -2,7 +2,7 @@
    Строятся как содержимое буфера обмена — вставка переназначает id,
    привязки стрелок и родителей, поэтому шаблон можно ставить сколько
    угодно раз. Миниатюры рисуются из тех же данных. */
-import { colorName, type ColorName, type Head, type NodeData, type Route, type ShapeKind, type TextSize } from "./model.ts";
+import { colorName, type ColorName, type Head, type LogicRule, type NodeData, type NodeType, type Route, type ShapeKind, type TextSize } from "./model.ts";
 import type { Clip } from "./ops.ts";
 import { pollData } from "./nodes/poll.ts";
 import { isoDay } from "./nodes/task.ts";
@@ -63,7 +63,11 @@ class TB {
   table(x: number, y: number, w: number, grid: string[][], parent?: string, color?: ColorName): string {
     return this.add({ type: "table", x, y, w, h: grid.length * 36, fit: true, parent, color, ...tableData(grid) } as NodeData);
   }
-  arrow(a: string, b: string, o: { route?: Route; head0?: Head; head1?: Head; label?: string; color?: ColorName; dash?: "solid" | "dash" | "dot" } = {}): string {
+  /** Любой объект (виджеты, логика). */
+  widget(type: NodeType, x: number, y: number, w: number, h: number, extra: Partial<NodeData> = {}): string {
+    return this.add({ type, x, y, w, h, ...extra } as NodeData);
+  }
+  arrow(a: string, b: string, o: { route?: Route; head0?: Head; head1?: Head; label?: string; color?: ColorName; dash?: "solid" | "dash" | "dot"; lg?: LogicRule } = {}): string {
     const na = this.nodes.find((n) => n.id === a)!;
     const nb = this.nodes.find((n) => n.id === b)!;
     const ca = { x: na.x + na.w / 2, y: na.y + na.h / 2 };
@@ -90,6 +94,7 @@ class TB {
       color: o.color ?? "default",
       text: o.label,
       size: "s",
+      lg: o.lg,
     });
   }
   clip(): Clip {
@@ -106,7 +111,7 @@ export interface Template {
   build: () => Clip;
 }
 
-export const TEMPLATE_GROUPS = ["Игры", "Команда", "Планы и стратегия", "Схемы и идеи"] as const;
+export const TEMPLATE_GROUPS = ["Интерактив и логика", "Игры", "Команда", "Планы и стратегия", "Схемы и идеи"] as const;
 export type TemplateGroup = (typeof TEMPLATE_GROUPS)[number];
 
 /* ------------------------------ шаблоны ------------------------------ */
@@ -568,6 +573,12 @@ function moodboard(): Clip {
 
 export const TEMPLATES: Template[] = [
   /* игры */
+  { id: "habits", group: "Интерактив и логика", label: "Трекер привычек", desc: "Отметки по дням, общий прогресс и награда", words: "привычки трекер неделя логика прогресс", build: habits },
+  { id: "quest", group: "Интерактив и логика", label: "Квест с наградой", desc: "Задания → опыт и прогресс → сундук открывается сам", words: "квест игра задания опыт xp награда логика геймификация", build: quest },
+  { id: "buzzer", group: "Интерактив и логика", label: "Викторина", desc: "Кнопки очков, колесо и таймер на ответ", words: "викторина квиз кнопки счёт колесо игра", build: buzzer },
+  { id: "standup", group: "Интерактив и логика", label: "Ежедневный созвон", desc: "Часы команды, статусы, колесо и таймер", words: "стендап созвон часы пояса статус команда", build: standup },
+  { id: "decide", group: "Интерактив и логика", label: "Решаем вместе", desc: "Оценки вариантов и живая диаграмма", words: "решение оценка рейтинг диаграмма голосование", build: decide },
+  { id: "logic", group: "Интерактив и логика", label: "Как работает логика", desc: "Примеры: свет, кубики, ползунок и статус", words: "логика пример обучение автоматизация стрелки", build: logicDemo },
   { id: "game", group: "Игры", label: "Игровой вечер", desc: "Во что и когда играем, роли, перерыв", words: "игра друзья голосование план встреча", build: gameNight },
   { id: "tactics", group: "Игры", label: "Тактическая карта", desc: "Зоны, команды, маршруты и план раунда", words: "игра тактика карта стратегия рейд матч cs dota", build: tactics },
   { id: "bracket", group: "Игры", label: "Турнирная сетка", desc: "8 команд: от четвертьфинала до победы", words: "турнир сетка плей-офф bracket киберспорт", build: bracket },
@@ -596,6 +607,124 @@ export const TEMPLATES: Template[] = [
   { id: "journey", group: "Схемы и идеи", label: "Путь пользователя", desc: "Этапы, мысли и эмоции", words: "cjm customer journey ux", build: journey },
   { id: "mood", group: "Схемы и идеи", label: "Мудборд", desc: "Цвета, референсы и настроение", words: "мудборд moodboard дизайн вдохновение референсы", build: moodboard },
 ];
+
+/* ------------------------- интерактив и логика ------------------------- */
+
+function habits(): Clip {
+  const t = new TB();
+  const f = t.frame(0, 0, 900, 640, "🌱 Трекер привычек", "green");
+  const a = t.widget("tracker", 40, 60, 400, 150, { title: "💪 Зарядка", cells: 7, color: "green", parent: f });
+  const b = t.widget("tracker", 40, 230, 400, 150, { title: "📚 Чтение 20 минут", cells: 7, color: "blue", parent: f });
+  const c = t.widget("tracker", 40, 400, 400, 150, { title: "💧 Вода 2 литра", cells: 7, color: "cyan", parent: f });
+  const p = t.progress(520, 120, 340, "Неделя", 0, { parent: f, color: "green" });
+  const r = t.widget("chart", 520, 300, 340, 250, { title: "Отмечено дней", ct: "bar", parent: f });
+  t.arrow(a, p, { lg: { on: "change", do: "share" } });
+  t.arrow(b, p, { lg: { on: "change", do: "share" } });
+  t.arrow(c, p, { lg: { on: "change", do: "share" } });
+  t.arrow(a, r, { dash: "dot" });
+  t.arrow(b, r, { dash: "dot" });
+  t.arrow(c, r, { dash: "dot" });
+  const s = t.sticker(800, 30, 70, "🏆", f);
+  t.arrow(p, s, { lg: { on: "full", do: "fx", x: "fanfare", rev: false } });
+  t.text(40, 580, 820, "Отмечайте клетки — полоса «Неделя» заполняется сама, а на 100 % будут фанфары. Стрелки с ⚡ — это логика: выделите стрелку, чтобы поменять правило.", { parent: f, size: "s", color: "gray" });
+  return t.clip();
+}
+
+function quest(): Clip {
+  const t = new TB();
+  const f = t.frame(0, 0, 1000, 620, "🗺️ Квест с наградой", "violet");
+  const q1 = t.task(40, 70, 320, "Найти карту в библиотеке", { parent: f });
+  const q2 = t.task(40, 170, 320, "Разгадать загадку сфинкса", { parent: f });
+  const q3 = t.task(40, 270, 320, "Победить дракона", { parent: f, prio: "high" });
+  const p = t.progress(420, 80, 300, "Прогресс квеста", 0, { parent: f, color: "violet", steps: 3 });
+  const xp = t.counter(780, 60, "Опыт (XP)", { parent: f, color: "yellow", w: 180, h: 150 });
+  t.arrow(q1, p, { lg: { on: "change", do: "share" } });
+  t.arrow(q2, p, { lg: { on: "change", do: "share" } });
+  t.arrow(q3, p, { lg: { on: "change", do: "share" } });
+  t.arrow(q1, xp, { lg: { on: "done", do: "add", n: 50, rev: true } });
+  t.arrow(q2, xp, { lg: { on: "done", do: "add", n: 50, rev: true } });
+  t.arrow(q3, xp, { lg: { on: "done", do: "add", n: 100, rev: true } });
+  const g = t.widget("gate", 470, 260, 150, 110, { gm: "and", parent: f });
+  t.arrow(q1, g, { dash: "dot" });
+  t.arrow(q2, g, { dash: "dot" });
+  t.arrow(q3, g, { dash: "dot" });
+  const prize = t.note(420, 430, 300, "## 🎁 Сундук открыт!\nНаграда: легендарный меч и 500 золотых.", { parent: f, color: "yellow" });
+  const chest = t.sticker(780, 300, 110, "🧰", f);
+  t.arrow(g, prize, { lg: { on: "on", do: "show", rev: true } });
+  t.arrow(g, chest, { lg: { on: "on", do: "fx", x: "confetti", rev: false } });
+  t.nodes.find((n) => n.id === prize)!.hid = true;
+  t.text(40, 560, 920, "Отмечайте задания: растёт прогресс и опыт. Когда выполнены все три, логический блок «И» откроет сундук — заметка с наградой появится сама.", { parent: f, size: "s", color: "gray" });
+  return t.clip();
+}
+
+function buzzer(): Clip {
+  const t = new TB();
+  const f = t.frame(0, 0, 900, 560, "🔔 Викторина с кнопками", "orange");
+  const a = t.counter(40, 60, "Команда A", { parent: f, color: "blue", w: 260, h: 180 });
+  const b = t.counter(600, 60, "Команда B", { parent: f, color: "red", w: 260, h: 180 });
+  const ba = t.widget("button", 40, 270, 260, 80, { title: "+1 команде A", emoji: "🔵", color: "blue", parent: f });
+  const bb = t.widget("button", 600, 270, 260, 80, { title: "+1 команде B", emoji: "🔴", color: "red", parent: f });
+  t.arrow(ba, a, { lg: { on: "press", do: "add", n: 1 } });
+  t.arrow(bb, b, { lg: { on: "press", do: "add", n: 1 } });
+  const wh = t.widget("wheel", 330, 40, 240, 300, { title: "Кто отвечает", parent: f, opts: ["Аня", "Борис", "Вика", "Гоша", "Даша", "Егор"].map((x, i) => ({ id: `o${i + 1}`, t: x })) });
+  const tm = t.timer(330, 370, 1, "На ответ", f);
+  t.arrow(wh, tm, { lg: { on: "result", do: "start" } });
+  const gong = t.sticker(80, 400, 90, "🔔", f);
+  t.arrow(tm, gong, { lg: { on: "end", do: "fx", x: "ding" } });
+  t.text(600, 400, 260, "Крутите колесо — таймер запустится сам. Кнопки прибавляют очки.", { parent: f, size: "s", color: "gray" });
+  return t.clip();
+}
+
+function standup(): Clip {
+  const t = new TB();
+  const f = t.frame(0, 0, 980, 560, "☕ Ежедневный созвон", "blue");
+  t.widget("clock", 40, 60, 200, 120, { tz: "Europe/Moscow", parent: f });
+  t.widget("clock", 260, 60, 200, 120, { tz: "Europe/London", parent: f });
+  t.widget("clock", 480, 60, 200, 120, { tz: "America/New_York", parent: f });
+  t.widget("countdown", 700, 60, 240, 120, { title: "До релиза", at: Date.now() + 14 * 86_400_000, parent: f });
+  const people = ["Аня", "Борис", "Вика"];
+  people.forEach((n, i) => t.widget("status", 40, 220 + i * 74, 300, 60, { title: n, st: i % 3, parent: f }));
+  t.widget("wheel", 380, 210, 260, 310, { title: "Кто начинает", parent: f, opts: people.map((x, i) => ({ id: `o${i + 1}`, t: x })) });
+  t.timer(680, 220, 15, "Созвон", f);
+  t.widget("rating", 680, 400, 260, 96, { title: "Как прошло?", parent: f });
+  return t.clip();
+}
+
+function decide(): Clip {
+  const t = new TB();
+  const f = t.frame(0, 0, 940, 560, "⚖️ Решаем вместе", "pink");
+  const r1 = t.widget("rating", 40, 70, 280, 96, { title: "Вариант A", parent: f });
+  const r2 = t.widget("rating", 40, 190, 280, 96, { title: "Вариант B", parent: f });
+  const r3 = t.widget("rating", 40, 310, 280, 96, { title: "Вариант C", parent: f });
+  const ch = t.widget("chart", 380, 70, 520, 330, { title: "Средняя оценка", ct: "bar", color: "pink", parent: f });
+  t.arrow(r1, ch, { dash: "dot" });
+  t.arrow(r2, ch, { dash: "dot" });
+  t.arrow(r3, ch, { dash: "dot" });
+  t.widget("slider", 40, 430, 420, 96, { title: "Насколько срочно", sv: 50, min: 0, max: 100, unit: "%", parent: f });
+  t.text(500, 440, 400, "Каждый ставит свою оценку — диаграмма обновляется у всех сразу.", { parent: f, size: "s", color: "gray" });
+  return t.clip();
+}
+
+function logicDemo(): Clip {
+  const t = new TB();
+  const f = t.frame(0, 0, 1000, 600, "⚡ Как работает логика", "cyan");
+  const sw = t.widget("switch", 40, 70, 240, 72, { title: "Свет", parent: f });
+  const lamp = t.sticker(370, 60, 90, "💡", f);
+  t.arrow(sw, lamp, { lg: { on: "on", do: "show", rev: true } });
+  t.nodes.find((n) => n.id === lamp)!.hid = true;
+  const btn = t.widget("button", 40, 200, 240, 80, { title: "Бросить", emoji: "🎲", parent: f });
+  const dice = t.dice(370, 170, 2, 6, { parent: f, h: 150 });
+  const sum = t.counter(700, 170, "Сумма бросков", { parent: f, color: "green", w: 240, h: 150 });
+  t.arrow(btn, dice, { lg: { on: "press", do: "roll" } });
+  t.arrow(dice, sum, { lg: { on: "roll", do: "addsrc" } });
+  const sl = t.widget("slider", 40, 360, 300, 96, { title: "Громкость", sv: 30, parent: f });
+  const pr = t.progress(400, 375, 300, "Как ползунок", 30, { parent: f, color: "cyan" });
+  t.arrow(sl, pr, { lg: { on: "change", do: "share" } });
+  const st = t.widget("status", 760, 380, 200, 56, { parent: f });
+  t.arrow(pr, st, { lg: { on: "full", do: "setst", x: "3", rev: false } });
+  t.text(40, 500, 920, "Проведите стрелку от одного объекта к другому, выделите её и нажмите ⚡ «Логика» — выберите, когда и что делать. Попробуйте: включите свет, нажмите кнопку, сдвиньте ползунок до конца.", { parent: f, size: "s", color: "gray" });
+  return t.clip();
+}
 
 /* ------------------------------ миниатюры ------------------------------ */
 
@@ -670,6 +799,28 @@ export function templateThumb(clip: Clip, W = 132, H = 80): string {
         break;
       case "sticker":
         out += `<circle cx="${(x + w / 2).toFixed(1)}" cy="${(y + h / 2).toFixed(1)}" r="${Math.max(1.5, w / 2.6).toFixed(1)}" style="fill:var(--c-yellow)"/>`;
+        break;
+      case "wheel":
+      case "clock":
+      case "gate":
+        out += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" rx="2" style="fill:var(--surface-3);stroke:var(--line-3)" stroke-width="0.6"/>`;
+        out += `<circle cx="${(x + w / 2).toFixed(1)}" cy="${(y + h / 2).toFixed(1)}" r="${Math.max(1.5, Math.min(w, h) / 3).toFixed(1)}" style="fill:${n.type === "wheel" ? "var(--c-orange)" : n.type === "gate" ? "var(--c-green)" : "var(--ink-3)"}"/>`;
+        break;
+      case "button":
+        out += `<rect x="${(x + 1).toFixed(1)}" y="${(y + 1).toFixed(1)}" width="${(w - 2).toFixed(1)}" height="${(h - 2).toFixed(1)}" rx="3" style="fill:${n.color && n.color !== "default" ? fillOf(n.color, 85) : "var(--accent)"}"/>`;
+        break;
+      case "switch":
+      case "slider":
+      case "rating":
+      case "status":
+      case "tracker":
+      case "chart":
+      case "countdown":
+      case "calc":
+      case "qr":
+        out += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" rx="2" style="fill:${n.color && n.color !== "default" ? fillOf(n.color, 30) : "var(--surface-3)"};stroke:var(--line-3)" stroke-width="0.6"/>`;
+        if (n.type === "chart") for (let i = 0; i < 4; i++) out += `<rect x="${(x + w * (0.14 + i * 0.2)).toFixed(1)}" y="${(y + h * (0.75 - (0.2 + ((i * 37) % 5) * 0.1))).toFixed(1)}" width="${(w * 0.12).toFixed(1)}" height="${(h * (0.2 + ((i * 37) % 5) * 0.1)).toFixed(1)}" style="fill:var(--accent)"/>`;
+        else out += `<rect x="${(x + w * 0.12).toFixed(1)}" y="${(y + h * 0.42).toFixed(1)}" width="${(w * 0.76).toFixed(1)}" height="${Math.max(1, h * 0.16).toFixed(1)}" rx="1" style="fill:${n.type === "tracker" ? "var(--c-green)" : "var(--ink-3)"}"/>`;
         break;
     }
   }

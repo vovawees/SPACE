@@ -26,6 +26,22 @@
   import CounterNode from "../nodes/CounterNode.svelte";
   import DiceNode from "../nodes/DiceNode.svelte";
   import ProgressNode from "../nodes/ProgressNode.svelte";
+  import ButtonNode from "../nodes/ButtonNode.svelte";
+  import SwitchNode from "../nodes/SwitchNode.svelte";
+  import SliderNode from "../nodes/SliderNode.svelte";
+  import RatingNode from "../nodes/RatingNode.svelte";
+  import ClockNode from "../nodes/ClockNode.svelte";
+  import CountdownNode from "../nodes/CountdownNode.svelte";
+  import ChartNode from "../nodes/ChartNode.svelte";
+  import QrNode from "../nodes/QrNode.svelte";
+  import WheelNode from "../nodes/WheelNode.svelte";
+  import StatusNode from "../nodes/StatusNode.svelte";
+  import TrackerNode from "../nodes/TrackerNode.svelte";
+  import CalcNode from "../nodes/CalcNode.svelte";
+  import GateNode from "../nodes/GateNode.svelte";
+  import { playFx } from "../nodes/fx.ts";
+  import { styleOf } from "../style.ts";
+  import { untrack } from "svelte";
   import type { NodeCompProps } from "../nodes/types.ts";
   import { QUIET, type NodeView } from "../store.svelte.ts";
   import { measureHeight } from "./measure.ts";
@@ -55,6 +71,19 @@
     dice: DiceNode,
     progress: ProgressNode,
     comment: CommentNode,
+    button: ButtonNode,
+    switch: SwitchNode,
+    slider: SliderNode,
+    rating: RatingNode,
+    clock: ClockNode,
+    countdown: CountdownNode,
+    chart: ChartNode,
+    qr: QrNode,
+    wheel: WheelNode,
+    status: StatusNode,
+    tracker: TrackerNode,
+    calc: CalcNode,
+    gate: GateNode,
   };
 
   const b = useBoard();
@@ -67,6 +96,21 @@
   const Comp = $derived(COMPONENTS[v.type] ?? NoteNode);
   const free = $derived(v.type === "path");
   const op = $derived(typeof v.props.opacity === "number" ? Math.max(0.1, Math.min(1, v.props.opacity)) : 1);
+  const look = $derived(styleOf(v.props));
+  // спрятан логикой: участникам не виден, редакторам — призраком
+  const hid = $derived(!!v.props.hid);
+  const gone = $derived(hid && b.readonly);
+  const tag = $derived(v.props.tag?.trim() ?? "");
+
+  /* разовый эффект от логики — у всех, кто видит доску */
+  let el = $state<HTMLElement>();
+  let fxSeq = untrack(() => v.props.fxe?.s ?? 0);
+  $effect(() => {
+    const fx = v.props.fxe;
+    if (!fx || fx.s === fxSeq) return;
+    fxSeq = fx.s;
+    if (el && !gone) playFx(el, fx.k);
+  });
 
   function onHeight(h: number) {
     if (!v.fit || h <= 0) return;
@@ -76,7 +120,8 @@
 </script>
 
 <div
-  class="node t-{v.type}{v.props.font ? ` f-${v.props.font}` : ''}"
+  bind:this={el}
+  class="node t-{v.type}{v.props.font ? ` f-${v.props.font}` : ''}{look.cls ? ` ${look.cls}` : ''}"
   class:sel
   class:editing
   class:fit={v.fit}
@@ -86,7 +131,10 @@
   class:hot
   class:remote={!!remote}
   class:moving={sel && b.ix.kind === "move"}
+  class:hid
+  class:gone
   data-id={v.id}
+  style={look.vars || null}
   style:transform={free ? null : `translate(${v.x}px,${v.y}px)${v.r ? ` rotate(${v.r}rad)` : ""}`}
   style:width={free ? null : `${v.w}px`}
   style:height={free || v.fit ? null : `${v.h}px`}
@@ -96,4 +144,5 @@
   {@attach v.fit ? measureHeight(onHeight) : null}
 >
   <Comp {v} {sel} {editing} />
+  {#if tag}<span class="node-tag" style:--tagc={v.props.tagc ? colorCss(v.props.tagc) : null}>{tag}</span>{/if}
 </div>

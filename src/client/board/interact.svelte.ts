@@ -16,7 +16,7 @@ import { BARBED, DEFAULT_BARBS, SIDE_N, fractionAt, magnetsOf, nearestOnOutline,
 import { boundsOf, center, containsPt, dist, expand, fromPoints, intersects, rotate, simplify, snapAngle, type Pt, type Rect } from "./geometry.ts";
 import { eraseHits, frameLabelHit, hitTest, insideNode, nodesInRect } from "./hit.ts";
 import { canvasMenu, linkEndMenu, nodeMenu, stickerMenu } from "./menus.ts";
-import { ASPECT_TYPES, TEXT_TYPES, defaults, type Binding, type Color, type ColorName, type Head, type NodeData, type NodeProps, type NodeType, type ShapeKind, type StrokeSize } from "./model.ts";
+import { ASPECT_TYPES, TEXT_TYPES, TITLED_TYPES, WIDGET_EDIT_TYPES, WIDGET_TYPES, defaults, type Binding, type Color, type ColorName, type Head, type NodeData, type NodeProps, type NodeType, type ShapeKind, type StrokeSize } from "./model.ts";
 import { duplicate, place, withChildren } from "./ops.ts";
 import { recognize } from "./recognize.ts";
 import { inkPx } from "./shapes.ts";
@@ -75,7 +75,7 @@ export interface AnchorHint {
 }
 
 /** У каких узлов есть «+» для связей. */
-export const CONNECTABLE = new Set<NodeType>(["note", "text", "code", "image", "video", "file", "shelf", "link", "shape", "sticker", "table", "task", "poll", "timer", "audio", "counter", "dice", "progress"]);
+export const CONNECTABLE = new Set<NodeType>(["note", "text", "code", "image", "video", "file", "shelf", "link", "shape", "sticker", "table", "task", "poll", "timer", "audio", "counter", "dice", "progress", ...WIDGET_TYPES]);
 
 const LONG_PRESS = 520;
 
@@ -565,6 +565,14 @@ export class Interact {
     }
     const v = s.get(id);
     if (!v) return;
+    if (TITLED_TYPES.has(v.type)) {
+      if (!b.readonly && !v.locked) this.renaming = id;
+      return;
+    }
+    if (WIDGET_EDIT_TYPES.has(v.type)) {
+      this.edit(id, "end");
+      return;
+    }
     switch (v.type) {
       case "note":
       case "text":
@@ -573,11 +581,6 @@ export class Interact {
       case "poll":
       case "table":
         this.edit(id, { x: q.cx, y: q.cy });
-        break;
-      case "timer":
-      case "counter":
-      case "progress":
-        if (!b.readonly) this.renaming = id;
         break;
       case "sticker":
         if (!b.readonly) stickerMenu(b, [id], { x: q.cx, y: q.cy });
@@ -2182,8 +2185,21 @@ const MIN_W: Partial<Record<NodeType, number>> = {
   video: 120,
   shape: 8,
   ink: 4,
+  button: 80,
+  switch: 140,
+  slider: 160,
+  rating: 140,
+  clock: 120,
+  countdown: 200,
+  chart: 160,
+  qr: 80,
+  wheel: 140,
+  status: 110,
+  tracker: 120,
+  calc: 110,
+  gate: 90,
 };
-const MIN_H: Partial<Record<NodeType, number>> = { counter: 90, dice: 100, progress: 64, sticker: 24, table: 36, task: 44, poll: 80, timer: 90, audio: 60, note: 44, code: 60, link: 60, shelf: 80, frame: 60, video: 68, image: 16, shape: 8, ink: 4, text: 24, file: 56 };
+const MIN_H: Partial<Record<NodeType, number>> = { button: 36, switch: 48, slider: 76, rating: 70, clock: 60, countdown: 90, chart: 120, qr: 90, wheel: 160, status: 40, tracker: 70, calc: 80, gate: 80, counter: 90, dice: 100, progress: 64, sticker: 24, table: 36, task: 44, poll: 80, timer: 90, audio: 60, note: 44, code: 60, link: 60, shelf: 80, frame: 60, video: 68, image: 16, shape: 8, ink: 4, text: 24, file: 56 };
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
 const round2 = (n: number) => Math.round(n * 100) / 100;

@@ -1,0 +1,348 @@
+/* ===================== оформление объектов (style.ts) =====================
+   Классы ставит NodeHost: sx-fill, sx-text, sx-border, sx-rad, shd-*, fx-*,
+   flip-*, flt-*. Цвет текста переопределяет токены --ink*, поэтому его
+   подхватывают все подписи внутри объекта. */
+
+.node.sx-fill > :is(.card, .frame-body),
+.node.sx-fill.tinted > :is(.card, .frame-body) {
+  background: var(--fill);
+}
+.node.sx-text {
+  --ink: var(--tc);
+  --ink-2: color-mix(in oklab, var(--tc) 84%, transparent);
+  --ink-3: color-mix(in oklab, var(--tc) 64%, transparent);
+  --ink-4: color-mix(in oklab, var(--tc) 44%, transparent);
+  --solid-ink: var(--tc);
+  color: var(--tc);
+}
+.node.sx-border > :is(.card, .media, .frame-body),
+.node.sx-border.tinted > :is(.card, .media, .frame-body) {
+  border: var(--bw) var(--bs) var(--bc);
+}
+.node.sx-rad > :is(.card, .media, .frame-body) {
+  border-radius: var(--rad);
+}
+
+/* тени (на дальнем масштабе выключены ради скорости) */
+.board:not(.mid) .node.shd-none > :is(.card, .media) {
+  box-shadow: none;
+}
+.board:not(.mid) .node.shd-s > :is(.card, .media) {
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.22),
+    0 3px 8px rgb(0 0 0 / 0.16);
+}
+.board:not(.mid) .node.shd-m > :is(.card, .media) {
+  box-shadow:
+    0 2px 4px rgb(0 0 0 / 0.2),
+    0 10px 24px -4px rgb(0 0 0 / 0.38);
+}
+.board:not(.mid) .node.shd-l > :is(.card, .media) {
+  box-shadow:
+    0 6px 12px rgb(0 0 0 / 0.22),
+    0 28px 56px -10px rgb(0 0 0 / 0.6);
+}
+.board:not(.mid) .node.shd-glow > :is(.card, .media) {
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--glow) 40%, transparent),
+    0 0 26px 2px color-mix(in oklab, var(--glow) 55%, transparent);
+}
+.board:not(.mid) .node.shd-neon > :is(.card, .media) {
+  box-shadow:
+    0 0 0 1px var(--glow),
+    0 0 10px var(--glow),
+    0 0 34px color-mix(in oklab, var(--glow) 65%, transparent),
+    inset 0 0 14px color-mix(in oklab, var(--glow) 35%, transparent);
+}
+.node.shd-neon.sx-text {
+  text-shadow: 0 0 8px color-mix(in oklab, var(--glow) 70%, transparent);
+}
+/* у фигур, стикеров и рисунков тени — по контуру */
+.board:not(.mid) .node.shd-s:is(.t-shape, .t-sticker, .t-ink) > :is(svg, .sticker) {
+  filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.3));
+}
+.board:not(.mid) .node.shd-m:is(.t-shape, .t-sticker, .t-ink) > :is(svg, .sticker) {
+  filter: drop-shadow(0 6px 10px rgb(0 0 0 / 0.4));
+}
+.board:not(.mid) .node.shd-l:is(.t-shape, .t-sticker, .t-ink) > :is(svg, .sticker) {
+  filter: drop-shadow(0 16px 22px rgb(0 0 0 / 0.55));
+}
+.board:not(.mid) .node:is(.shd-glow, .shd-neon):is(.t-shape, .t-sticker, .t-ink) > :is(svg, .sticker) {
+  filter: drop-shadow(0 0 10px var(--glow, var(--c))) drop-shadow(0 0 3px var(--glow, var(--c)));
+}
+
+/* отражение */
+.node.flip-h > :not(.node-tag, .fx-burst) {
+  scale: -1 1;
+}
+.node.flip-v > :not(.node-tag, .fx-burst) {
+  scale: 1 -1;
+}
+.node.flip-hv > :not(.node-tag, .fx-burst) {
+  scale: -1 -1;
+}
+
+/* фильтры картинок */
+.node.flt-gray > :not(.node-tag, .fx-burst) {
+  filter: grayscale(1);
+}
+.node.flt-sepia > :not(.node-tag, .fx-burst) {
+  filter: sepia(0.85);
+}
+.node.flt-vivid > :not(.node-tag, .fx-burst) {
+  filter: saturate(1.65) contrast(1.08);
+}
+.node.flt-dim > :not(.node-tag, .fx-burst) {
+  filter: brightness(0.68);
+}
+.node.flt-warm > :not(.node-tag, .fx-burst) {
+  filter: sepia(0.28) saturate(1.35) hue-rotate(-10deg);
+}
+.node.flt-cool > :not(.node-tag, .fx-burst) {
+  filter: saturate(1.12) hue-rotate(16deg) brightness(1.03);
+}
+.node.flt-invert > :not(.node-tag, .fx-burst) {
+  filter: invert(1) hue-rotate(180deg);
+}
+.node.flt-blur > :not(.node-tag, .fx-burst) {
+  filter: blur(3px);
+}
+
+/* постоянные эффекты */
+.node.fx-float > :not(.fx-burst) {
+  animation: sx-float 3.2s ease-in-out infinite;
+}
+.node.fx-pulse > :not(.fx-burst) {
+  animation: sx-pulse 1.6s ease-in-out infinite;
+}
+.node.fx-breathe > :not(.fx-burst) {
+  animation: sx-breathe 4.2s ease-in-out infinite;
+}
+.node.fx-wobble > :not(.fx-burst) {
+  animation: sx-wobble 2.4s ease-in-out infinite;
+}
+.node.fx-bounce > :not(.fx-burst) {
+  animation: sx-bounce 1.5s cubic-bezier(0.3, 0, 0.4, 1) infinite;
+}
+.node.fx-shake > :not(.fx-burst) {
+  animation: sx-shake 2.6s ease-in-out infinite;
+}
+.node.fx-spin > :not(.fx-burst, .node-tag) {
+  animation: sx-spin 8s linear infinite;
+}
+.node.fx-glow > :is(.card, svg, .sticker) {
+  animation: sx-glow 2.2s ease-in-out infinite;
+}
+.node.fx-rainbow > :not(.fx-burst, .node-tag) {
+  animation: sx-rainbow 6s linear infinite;
+}
+/* пока объект тянут или правят — без движения */
+.node.fx-float.sel > *,
+.node.fx-bounce.sel > *,
+.node.fx-shake.sel > *,
+.node.fx-spin.sel > *,
+.node.fx-wobble.sel > *,
+.node.editing > * {
+  animation-play-state: paused;
+}
+@keyframes sx-float {
+  50% {
+    transform: translateY(-8px);
+  }
+}
+@keyframes sx-pulse {
+  50% {
+    transform: scale(1.045);
+  }
+}
+@keyframes sx-breathe {
+  50% {
+    transform: scale(0.985);
+    opacity: 0.78;
+  }
+}
+@keyframes sx-wobble {
+  25% {
+    transform: rotate(-2.2deg);
+  }
+  75% {
+    transform: rotate(2.2deg);
+  }
+}
+@keyframes sx-bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-14px);
+  }
+  60% {
+    transform: translateY(0);
+  }
+  70% {
+    transform: translateY(-4px);
+  }
+}
+@keyframes sx-shake {
+  0%,
+  22%,
+  100% {
+    transform: translateX(0);
+  }
+  4%,
+  12% {
+    transform: translateX(-5px) rotate(-1deg);
+  }
+  8%,
+  16% {
+    transform: translateX(5px) rotate(1deg);
+  }
+}
+@keyframes sx-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes sx-glow {
+  50% {
+    box-shadow: 0 0 30px 6px color-mix(in oklab, var(--glow, var(--c, var(--accent))) 60%, transparent);
+    filter: brightness(1.08);
+  }
+}
+@keyframes sx-rainbow {
+  to {
+    filter: hue-rotate(360deg);
+  }
+}
+
+/* ======================= скрытые логикой объекты ======================= */
+
+.node.hid {
+  opacity: 0.32 !important;
+}
+.node.hid::before {
+  content: "";
+  position: absolute;
+  inset: calc(-4px * var(--iz, 1));
+  border: calc(1.5px * var(--iz, 1)) dashed var(--ink-3);
+  border-radius: calc(var(--r-3) + 3px * var(--iz, 1));
+  pointer-events: none;
+}
+.node.gone {
+  display: none;
+}
+
+/* =============================== метка =============================== */
+
+.node-tag {
+  position: absolute;
+  top: -11px;
+  left: 12px;
+  z-index: 3;
+  max-width: calc(100% - 24px);
+  padding: 2px 9px;
+  border-radius: 99px;
+  background: var(--tagc, var(--accent));
+  color: #fff;
+  font: 650 12px/1.4 var(--font-ui);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow:
+    0 0 0 2px var(--bg),
+    0 3px 8px rgb(0 0 0 / 0.3);
+  pointer-events: none;
+  text-shadow: 0 1px 1px rgb(0 0 0 / 0.2);
+}
+.node.t-sticker .node-tag,
+.node.t-shape .node-tag {
+  top: -4px;
+}
+
+/* ===================== разовые эффекты (nodes/fx.ts) ===================== */
+
+.fx-burst {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  z-index: 6;
+  pointer-events: none;
+}
+.fx-burst i {
+  position: absolute;
+  left: 0;
+  top: 0;
+  font-style: normal;
+  animation: fx-fly var(--t) cubic-bezier(0.18, 0.75, 0.3, 1) forwards;
+}
+.fx-burst .conf {
+  width: 9px;
+  height: 13px;
+  margin: -6px -4px;
+  border-radius: 2px;
+}
+.fx-burst .glyph {
+  line-height: 1;
+  translate: -50% -50%;
+}
+@keyframes fx-fly {
+  0% {
+    transform: translate(0, 0) rotate(0deg) scale(0.4);
+    opacity: 1;
+  }
+  65% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--dx), calc(var(--dy) + 70px)) rotate(var(--r)) scale(1);
+    opacity: 0;
+  }
+}
+.node.fxe-flash > :not(.fx-burst) {
+  animation: fxe-flash 0.85s ease-out;
+}
+.node.fxe-shake > :not(.fx-burst) {
+  animation: fxe-shake 0.6s ease-in-out;
+}
+.node.fxe-pulse > :not(.fx-burst) {
+  animation: fxe-pulse 0.6s var(--ease-spring);
+}
+@keyframes fxe-flash {
+  0% {
+    filter: brightness(2) saturate(1.5);
+  }
+}
+@keyframes fxe-shake {
+  15%,
+  45%,
+  75% {
+    transform: translateX(-7px);
+  }
+  30%,
+  60%,
+  90% {
+    transform: translateX(7px);
+  }
+}
+@keyframes fxe-pulse {
+  40% {
+    transform: scale(1.12);
+  }
+}
+
+[data-reduce-motion] .node[class*=" fx-"] > *,
+[data-reduce-motion] .node[class*="fxe-"] > *,
+[data-reduce-motion] .fx-burst {
+  animation: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .node[class*=" fx-"] > *,
+  .fx-burst i {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

@@ -62,6 +62,7 @@ import { EMOJI_GROUPS } from "./library.ts";
 import { addComment, addCommentRemote } from "./nodes/comment.ts";
 import { promptText } from "../ui/confirm.svelte.ts";
 import { audioItems, counterItems, diceItems, pollItems, progressItems, tableItems, taskItems, timerItems } from "./nodes/actions.ts";
+import { widgetItems } from "./nodes/widgetItems.ts";
 import { toasts } from "../lib/toast.svelte.ts";
 import { copyText, download } from "../lib/util.ts";
 import { menu, type MenuEntry, type MenuItem } from "../ui/menu.svelte.ts";
@@ -83,6 +84,7 @@ import {
   SHAPE_LABELS,
   SHAPE_KINDS,
   TEXT_TYPES,
+  WIDGET_TYPES,
   type Dash,
   type Fill,
   type Head,
@@ -482,6 +484,8 @@ function typeItems(b: Board, ix: Interact, v: NodeView): MenuEntry[] {
     case "progress":
       out.push(...progressItems(b, [v], () => (ix.renaming = v.id)));
       break;
+    default:
+      if (WIDGET_TYPES.has(v.type)) out.push(...widgetItems(b, [v]));
   }
   return clean(out);
 }

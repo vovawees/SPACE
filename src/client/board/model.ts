@@ -27,7 +27,20 @@ export type NodeType =
   | "counter"
   | "dice"
   | "progress"
-  | "comment";
+  | "comment"
+  | "button"
+  | "switch"
+  | "slider"
+  | "rating"
+  | "clock"
+  | "countdown"
+  | "chart"
+  | "qr"
+  | "wheel"
+  | "status"
+  | "tracker"
+  | "calc"
+  | "gate";
 
 export const COLORS = ["default", "gray", "yellow", "orange", "red", "pink", "violet", "blue", "cyan", "green"] as const;
 export type ColorName = (typeof COLORS)[number];
@@ -259,10 +272,88 @@ export interface NodeProps {
   // прозрачность 0.1..1 и шрифт текста
   opacity?: number;
   font?: FontName;
+  // оформление (см. style.ts)
+  fc?: string;
+  fc2?: string;
+  ga?: number;
+  tc?: string;
+  bc?: string;
+  bw?: number;
+  bs?: "solid" | "dashed" | "dotted" | "double";
+  rad?: number;
+  shd?: "none" | "s" | "m" | "l" | "glow" | "neon";
+  fx?: string;
+  flip?: "h" | "v" | "hv";
+  flt?: string;
+  tag?: string;
+  tagc?: string;
+  /** Спрятан логикой: участникам не виден, редакторам — призраком. */
+  hid?: boolean;
+  /** Разовый эффект от логики (салют, вспышка, звук): номер и вид. */
+  fxe?: { s: number; k: string } | null;
+  // кнопка: последнее нажатие, вид, куда ведёт (адрес или #id объекта)
+  press?: { s: number; n: string; c: string } | null;
+  bv?: "solid" | "soft" | "outline";
+  href?: string;
+  // переключатель и логический блок: включён
+  on?: boolean;
+  // ползунок: значение и пределы (max — и число звёзд у оценки)
+  sv?: number;
+  min?: number;
+  max?: number;
+  unit?: string;
+  // оценка: значок; голоса — поля rt:<id человека>
+  ri?: "star" | "heart" | "fire" | "like";
+  // часы: пояс, вид, секунды
+  tz?: string;
+  cv?: "digital" | "analog";
+  sec?: boolean;
+  // обратный отсчёт: момент (мс)
+  at?: number | null;
+  // диаграмма
+  ct?: "bar" | "line" | "pie" | "donut";
+  data?: ChartPoint[];
+  // колесо: последний запуск
+  spin?: { s: number; a: number; i: number; n: string; c: string; at: number } | null;
+  // статус: варианты и текущий
+  sts?: { t: string; c: string }[];
+  st?: number;
+  // трекер: клеток; отметки — поля k:<номер>
+  cells?: number;
+  // вычисление
+  op?: CalcOp;
+  dec?: number;
+  // логический блок
+  gm?: GateMode;
+  // логика на стрелке: когда что делать
+  lg?: LogicRule | null;
+}
+
+export interface ChartPoint {
+  l: string;
+  v: number;
+  c?: string;
+}
+
+export type CalcOp = "sum" | "avg" | "min" | "max" | "count" | "mul" | "diff";
+export const CALC_LABELS: Record<CalcOp, string> = { sum: "Сумма", avg: "Среднее", min: "Минимум", max: "Максимум", count: "Сколько выполнено", mul: "Произведение", diff: "Разность" };
+export type GateMode = "and" | "or" | "not" | "xor";
+export const GATE_LABELS: Record<GateMode, string> = { and: "И — все", or: "ИЛИ — любой", not: "НЕ — ни одного", xor: "Только один" };
+
+/** Правило логики: на источнике (начало стрелки) — событие, на цели (конец) — действие. */
+export interface LogicRule {
+  on: string;
+  do: string;
+  n?: number;
+  x?: string;
+  /** Обратное событие отменяет действие (сняли галочку — вернуть). */
+  rev?: boolean;
 }
 
 /** Поле ячейки таблицы. */
 export const cellKey = (row: string, col: string) => `c:${row}:${col}`;
+export const rateKey = (user: string) => `rt:${user}`;
+export const markKey = (i: number) => `k:${i}`;
 export const voteKey = (user: string) => `vote:${user}`;
 
 export const GEOMETRY_KEYS = ["x", "y", "w", "h", "r", "z", "parent"] as const;
@@ -292,7 +383,13 @@ export const FONTS: { id: FontName; label: string }[] = [
   { id: "hand", label: "Рукописный" },
 ];
 /** Где выбор шрифта имеет смысл: есть свой текст, и это не код. */
-export const FONT_TYPES = new Set<NodeType>(["note", "text", "shape", "path", "task", "poll", "table", "frame", "counter", "timer", "progress"]);
+export const FONT_TYPES = new Set<NodeType>(["note", "text", "shape", "path", "task", "poll", "table", "frame", "counter", "timer", "progress", "button", "switch", "slider", "rating", "clock", "countdown", "chart", "wheel", "status", "tracker", "calc", "gate"]);
+/** Объекты с заголовком: двойной щелчок или Enter — переименовать. */
+export const TITLED_TYPES = new Set<NodeType>(["timer", "counter", "progress", "button", "switch", "slider", "rating", "clock", "countdown", "tracker", "calc"]);
+/** Виджеты со своим режимом правки (варианты, значения, содержимое). */
+export const WIDGET_EDIT_TYPES = new Set<NodeType>(["chart", "wheel", "qr", "status"]);
+/** Новые виджеты и логика: к ним можно вести стрелки, их можно вращать. */
+export const WIDGET_TYPES = new Set<NodeType>(["button", "switch", "slider", "rating", "clock", "countdown", "chart", "qr", "wheel", "status", "tracker", "calc", "gate"]);
 /** Типы с высотой по содержимому. */
 export const FIT_TYPES = new Set<NodeType>(["note", "text", "code", "link", "file", "shelf", "table", "task", "poll", "audio"]);
 /** Сохраняют пропорции при изменении размера. */
@@ -321,6 +418,19 @@ export const TYPE_LABELS: Record<NodeType, string> = {
   dice: "Кубики",
   progress: "Прогресс",
   comment: "Комментарий",
+  button: "Кнопка",
+  switch: "Переключатель",
+  slider: "Ползунок",
+  rating: "Оценка",
+  clock: "Часы",
+  countdown: "Обратный отсчёт",
+  chart: "Диаграмма",
+  qr: "QR-код",
+  wheel: "Колесо фортуны",
+  status: "Статус",
+  tracker: "Трекер",
+  calc: "Вычисление",
+  gate: "Логический блок",
 };
 
 export const SHAPE_LABELS: Record<ShapeKind, string> = {
@@ -400,6 +510,32 @@ export function defaults(type: NodeType): Partial<NodeData> {
       return { w: 320, h: 92, pv: 30 };
     case "comment":
       return { w: 36, h: 36 };
+    case "button":
+      return { w: 200, h: 72, title: "Нажми меня", emoji: "⚡" };
+    case "switch":
+      return { w: 220, h: 72, title: "Переключатель" };
+    case "slider":
+      return { w: 300, h: 96, sv: 50, min: 0, max: 100, step: 1 };
+    case "rating":
+      return { w: 260, h: 96, max: 5, ri: "star" };
+    case "clock":
+      return { w: 220, h: 120, cv: "digital" };
+    case "countdown":
+      return { w: 320, h: 130, at: null };
+    case "chart":
+      return { w: 380, h: 260, ct: "bar" };
+    case "qr":
+      return { w: 200, h: 236 };
+    case "wheel":
+      return { w: 320, h: 360, opts: [1, 2, 3, 4, 5, 6].map((i) => ({ id: `o${i}`, t: `Вариант ${i}` })) };
+    case "status":
+      return { w: 200, h: 56, st: 0 };
+    case "tracker":
+      return { w: 340, h: 150, cells: 7 };
+    case "calc":
+      return { w: 220, h: 130, op: "sum" };
+    case "gate":
+      return { w: 150, h: 110, gm: "and" };
   }
 }
 

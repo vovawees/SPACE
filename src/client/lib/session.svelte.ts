@@ -22,7 +22,7 @@ export interface Settings {
   reduceMotion: boolean;
   /** Левая панель «Библиотека»: открыта ли и на каком разделе. */
   library: boolean;
-  libCat: "basic" | "shapes" | "stickers" | "templates" | "services";
+  libCat: "basic" | "widgets" | "shapes" | "stickers" | "templates" | "services";
 }
 
 const DEFAULTS: Settings = {
