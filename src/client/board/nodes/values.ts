@@ -3,9 +3,10 @@
    из полей узла — ничего не хранится отдельно. */
 import { TYPE_LABELS, markKey, type CalcOp, type GateMode, type NodeProps } from "../model.ts";
 import type { BoardStore, NodeView } from "../store.svelte.ts";
-import { counterValue } from "./games.ts";
+import { counterValue, diceTotal } from "./games.ts";
 import { votesOf } from "./poll.ts";
 import { timerLeft } from "./timer.ts";
+import { buzzesOf, checklistCount, deckCards, deckLeft, markedDays, swElapsed, swRunning, topScore, wordsCount } from "./play.ts";
 
 const R = (n: number) => Math.round(n * 1000) / 1000;
 
@@ -59,7 +60,16 @@ export function textNumber(t: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-const NUMERIC = new Set(["counter", "progress", "slider", "rating", "switch", "gate", "task", "dice", "poll", "tracker", "calc", "status", "timer", "note", "text", "shape", "button", "countdown"]);
+const NUMERIC = new Set([
+  "counter", "progress", "slider", "rating", "switch", "gate", "task", "dice", "poll", "tracker", "calc", "status", "timer", "note", "text", "shape", "button", "countdown",
+  "stopwatch", "coin", "flipcard", "deck", "random", "score", "turns", "buzzer", "checklist", "input", "calendar", "words", "spoiler",
+]);
+
+/** Число в поле ввода (если там число). */
+export function inputNumber(p: NodeProps): number | null {
+  const t = (p.iv ?? "").trim();
+  return t ? textNumber(t) : null;
+}
 
 /** Можно ли показать узел числом (для вычислений и диаграмм). */
 export const hasNumber = (v: NodeView) => NUMERIC.has(v.type);
@@ -82,7 +92,7 @@ export function numValue(s: BoardStore, v: NodeView, depth = 0): number | null {
     case "task":
       return p.done ? 1 : 0;
     case "dice":
-      return (p.roll?.v ?? []).reduce((a, b) => a + b, 0);
+      return diceTotal(p);
     case "poll":
       return votesOf(v).size;
     case "tracker":
@@ -97,6 +107,31 @@ export function numValue(s: BoardStore, v: NodeView, depth = 0): number | null {
       return typeof p.at === "number" ? Math.max(0, Math.ceil((p.at - Date.now()) / 86_400_000)) : null;
     case "calc":
       return depth > 6 ? null : calcValue(s, v, depth + 1);
+    case "stopwatch":
+      return Math.floor(swElapsed(p) / 1000);
+    case "coin":
+      return (p.ch?.[0] ?? 0) + (p.ch?.[1] ?? 0);
+    case "flipcard":
+    case "spoiler":
+      return p.on ? 1 : 0;
+    case "deck":
+      return deckLeft(p);
+    case "random":
+      return p.rnd ? textNumber(p.rnd.v) : null;
+    case "score":
+      return topScore(p);
+    case "turns":
+      return Math.max(1, p.rn ?? 1);
+    case "buzzer":
+      return buzzesOf(p).length;
+    case "checklist":
+      return checklistCount(p)[0];
+    case "input":
+      return inputNumber(p);
+    case "calendar":
+      return markedDays(p);
+    case "words":
+      return wordsCount(p);
     case "note":
     case "text":
     case "shape": {
@@ -134,11 +169,31 @@ export function doneShare(s: BoardStore, v: NodeView, goal?: number, depth = 0):
       const n = statusesOf(p).length;
       return n > 1 ? Math.max(0, Math.min(1, (p.st ?? 0) / (n - 1))) : 0;
     }
+    case "flipcard":
+    case "spoiler":
+      return p.on ? 1 : 0;
+    case "stopwatch":
+      return swRunning(p) ? 1 : 0;
+    case "checklist": {
+      const [d, all] = checklistCount(p);
+      return all ? d / all : 0;
+    }
+    case "deck": {
+      const n = deckCards(p).length;
+      return n ? 1 - deckLeft(p) / n : 0;
+    }
     case "counter":
     case "dice":
     case "calc":
     case "poll":
-    case "button": {
+    case "button":
+    case "score":
+    case "buzzer":
+    case "input":
+    case "calendar":
+    case "words":
+    case "random":
+    case "coin": {
       const n = numValue(s, v, depth);
       if (n === null) return null;
       return goal && goal > 0 ? Math.max(0, Math.min(1, n / goal)) : n > 0 ? 1 : 0;

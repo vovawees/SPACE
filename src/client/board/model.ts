@@ -40,7 +40,22 @@ export type NodeType =
   | "status"
   | "tracker"
   | "calc"
-  | "gate";
+  | "gate"
+  | "stopwatch"
+  | "coin"
+  | "flipcard"
+  | "deck"
+  | "random"
+  | "score"
+  | "turns"
+  | "buzzer"
+  | "checklist"
+  | "input"
+  | "calendar"
+  | "icon"
+  | "token"
+  | "words"
+  | "spoiler";
 
 export const COLORS = ["default", "gray", "yellow", "orange", "red", "pink", "violet", "blue", "cyan", "green"] as const;
 export type ColorName = (typeof COLORS)[number];
@@ -257,6 +272,16 @@ export interface NodeProps {
   dur?: number;
   end?: number | null;
   left?: number | null;
+  /** Шаг кнопок ± (мс). */
+  tstep?: number;
+  /** Звук: none — без звука, иначе вид сигнала (у каждого типа свой по умолчанию). */
+  snd?: string;
+  /** Начинать заново, когда время вышло. */
+  loop?: boolean;
+  /** Надпись, когда время вышло / отсчёт закончился. */
+  endt?: string;
+  /** Вид таймера: полоса, кольцо, только цифры. */
+  tv?: "bar" | "ring" | "none";
   // счётчик: база (+ поправки участников d:<id>) и шаг
   n0?: number;
   step?: number;
@@ -264,9 +289,27 @@ export interface NodeProps {
   sides?: number;
   count?: number;
   roll?: { v: number[]; n: string; c: string; s: number } | null;
+  /** Свои грани кубика (текст или эмодзи) — вместо чисел. */
+  faces?: string[];
+  /** Прибавка к сумме броска. */
+  mod?: number;
+  /** Что считать: все кубики, лучший или худший. */
+  keep?: "all" | "hi" | "lo";
+  /** Вид кубиков. */
+  ds?: "classic" | "color" | "dark" | "glass";
+  /** Показывать последние броски. */
+  hist?: boolean;
+  /** Последние броски (новые в конце). */
+  rh?: { v: number[]; n: string; c: string; t: number }[];
+  /** Счётчик: значение для «Сбросить». */
+  rst?: number;
   // прогресс: 0..100 и деление на этапы
   pv?: number;
   steps?: number;
+  /** Как подписать: проценты, «7 из 10», без числа. */
+  pf?: "pct" | "frac" | "none";
+  /** Кнопки −/+ на самой полосе. */
+  pb?: boolean;
   // комментарий: обсуждение решено (сообщения — поля m:<id>)
   resolved?: boolean;
   // прозрачность 0.1..1 и шрифт текста
@@ -304,10 +347,12 @@ export interface NodeProps {
   unit?: string;
   // оценка: значок; голоса — поля rt:<id человека>
   ri?: "star" | "heart" | "fire" | "like";
-  // часы: пояс, вид, секунды
+  // часы: пояс, вид, секунды, 12-часовой формат, дата
   tz?: string;
   cv?: "digital" | "analog";
   sec?: boolean;
+  h12?: boolean;
+  date?: boolean;
   // обратный отсчёт: момент (мс)
   at?: number | null;
   // диаграмма
@@ -327,6 +372,63 @@ export interface NodeProps {
   gm?: GateMode;
   // логика на стрелке: когда что делать
   lg?: LogicRule | null;
+  // секундомер: идёт с момента t0 (мс), накоплено до этого acc; круги — общее время на отметке
+  t0?: number | null;
+  acc?: number;
+  laps?: number[];
+  /** Секундомер: показывать сотые. */
+  ms?: boolean;
+  // монетка: последний бросок (v: 0 — первая сторона, 1 — вторая), подписи сторон, счёт
+  coin?: { s: number; v: 0 | 1; n: string; c: string } | null;
+  cf?: string[];
+  ch?: number[];
+  // карточка: лицо и оборот; on — перевёрнута у всех; self — каждый переворачивает у себя
+  ft?: string;
+  bt?: string;
+  self?: boolean;
+  // колода: набор, оставшиеся карты (номера), последняя вытянутая
+  dk?: "36" | "52" | "custom";
+  pile?: number[];
+  top?: { i: number; s: number; n: string; c: string } | null;
+  /** Колода: вытянутые (номера), последние в конце. */
+  out?: number[];
+  /** Колода: номер перетасовки (анимация у всех). */
+  shf?: number;
+  // случайное: что выбирать, результат, без повторов (уже выпавшие)
+  rm?: "num" | "list" | "people";
+  rnd?: { s: number; v: string; n: string; c: string } | null;
+  uniq?: boolean;
+  used?: string[];
+  // табло и очередь ходов: игроки; очки — поля sc:<id игрока>
+  pl?: Player[];
+  cur?: number;
+  rn?: number;
+  /** Табло: сортировать по очкам. */
+  sort?: boolean;
+  // чек-лист: пункты; отметки — поля ck:<id пункта>
+  cl?: { id: string; t: string }[];
+  /** Чек-лист: прятать выполненные. */
+  hd?: boolean;
+  // поле ввода: значение, вид, подсказка
+  iv?: string;
+  it?: "text" | "num";
+  ph?: string;
+  // календарь: месяц «2025-07» (пусто — текущий), начало недели; отметки — поля k:<дата>
+  ym?: string;
+  // значок: имя иконки и толщина линий
+  ic?: string;
+  isw?: number;
+  // фишка: форма
+  tk?: "circle" | "square" | "pawn" | "star" | "hex";
+  // «кто первый»: нажатия — поля bq:<id человека> (время)
+  /** Скрытый текст: кому открывается по щелчку. */
+  sm?: "all" | "self";
+}
+
+export interface Player {
+  id: string;
+  t: string;
+  c: string;
 }
 
 export interface ChartPoint {
@@ -361,6 +463,11 @@ export const cellKey = (row: string, col: string) => `c:${row}:${col}`;
 export const rateKey = (user: string) => `rt:${user}`;
 export const markKey = (i: number) => `k:${i}`;
 export const voteKey = (user: string) => `vote:${user}`;
+export const scoreKey = (player: string) => `sc:${player}`;
+export const checkKey = (item: string) => `ck:${item}`;
+export const buzzKey = (user: string) => `bq:${user}`;
+export const wordsKey = (user: string) => `w:${user}`;
+export const dayKey = (iso: string) => `k:${iso}`;
 
 export const GEOMETRY_KEYS = ["x", "y", "w", "h", "r", "z", "parent"] as const;
 export type GeometryKey = (typeof GEOMETRY_KEYS)[number];
@@ -389,17 +496,25 @@ export const FONTS: { id: FontName; label: string }[] = [
   { id: "hand", label: "Рукописный" },
 ];
 /** Где выбор шрифта имеет смысл: есть свой текст, и это не код. */
-export const FONT_TYPES = new Set<NodeType>(["note", "text", "shape", "path", "task", "poll", "table", "frame", "counter", "timer", "progress", "button", "switch", "slider", "rating", "clock", "countdown", "chart", "wheel", "status", "tracker", "calc", "gate"]);
+export const FONT_TYPES = new Set<NodeType>([
+  "note", "text", "shape", "path", "task", "poll", "table", "frame", "counter", "timer", "progress", "button", "switch", "slider", "rating", "clock", "countdown", "chart", "wheel", "status", "tracker", "calc", "gate",
+  "stopwatch", "coin", "flipcard", "deck", "random", "score", "turns", "buzzer", "checklist", "input", "calendar", "token", "words", "spoiler",
+]);
 /** Объекты с заголовком: двойной щелчок или Enter — переименовать. */
 export const TITLED_TYPES = new Set<NodeType>(["timer", "counter", "progress", "button", "switch", "slider", "rating", "clock", "countdown", "tracker", "calc"]);
 /** Виджеты со своим режимом правки (варианты, значения, содержимое). */
 export const WIDGET_EDIT_TYPES = new Set<NodeType>(["chart", "wheel", "qr", "status"]);
 /** Новые виджеты и логика: к ним можно вести стрелки, их можно вращать. */
-export const WIDGET_TYPES = new Set<NodeType>(["button", "switch", "slider", "rating", "clock", "countdown", "chart", "qr", "wheel", "status", "tracker", "calc", "gate"]);
+export const WIDGET_TYPES = new Set<NodeType>([
+  "button", "switch", "slider", "rating", "clock", "countdown", "chart", "qr", "wheel", "status", "tracker", "calc", "gate",
+  "stopwatch", "coin", "flipcard", "deck", "random", "score", "turns", "buzzer", "checklist", "input", "calendar", "icon", "token", "words", "spoiler",
+]);
+/** Объекты-приборы: двойной щелчок и Enter открывают панель настроек. */
+export const INSPECT_TYPES = new Set<NodeType>([...WIDGET_TYPES, "timer", "counter", "dice", "progress", "sticker"]);
 /** Типы с высотой по содержимому. */
-export const FIT_TYPES = new Set<NodeType>(["note", "text", "code", "link", "file", "shelf", "table", "task", "poll", "audio"]);
+export const FIT_TYPES = new Set<NodeType>(["note", "text", "code", "link", "file", "shelf", "table", "task", "poll", "audio", "checklist"]);
 /** Сохраняют пропорции при изменении размера. */
-export const ASPECT_TYPES = new Set<NodeType>(["image", "video", "sticker"]);
+export const ASPECT_TYPES = new Set<NodeType>(["image", "video", "sticker", "icon", "token"]);
 
 export const TYPE_LABELS: Record<NodeType, string> = {
   note: "Заметка",
@@ -437,6 +552,21 @@ export const TYPE_LABELS: Record<NodeType, string> = {
   tracker: "Трекер",
   calc: "Вычисление",
   gate: "Логический блок",
+  stopwatch: "Секундомер",
+  coin: "Монетка",
+  flipcard: "Карточка",
+  deck: "Колода карт",
+  random: "Случайный выбор",
+  score: "Табло счёта",
+  turns: "Очередь ходов",
+  buzzer: "Кто первый",
+  checklist: "Чек-лист",
+  input: "Поле ввода",
+  calendar: "Календарь",
+  icon: "Значок",
+  token: "Фишка",
+  words: "Облако слов",
+  spoiler: "Сюрприз",
 };
 
 export const SHAPE_LABELS: Record<ShapeKind, string> = {
@@ -511,7 +641,7 @@ export function defaults(type: NodeType): Partial<NodeData> {
     case "counter":
       return { w: 200, h: 150, n0: 0, step: 1 };
     case "dice":
-      return { w: 220, h: 170, sides: 6, count: 2, roll: null };
+      return { w: 260, h: 190, sides: 6, count: 2, roll: null };
     case "progress":
       return { w: 320, h: 92, pv: 30 };
     case "comment":
@@ -542,6 +672,36 @@ export function defaults(type: NodeType): Partial<NodeData> {
       return { w: 220, h: 130, op: "sum" };
     case "gate":
       return { w: 150, h: 110, gm: "and" };
+    case "stopwatch":
+      return { w: 240, h: 150, t0: null, acc: 0 };
+    case "coin":
+      return { w: 190, h: 210, coin: null };
+    case "flipcard":
+      return { w: 260, h: 170, ft: "Вопрос", bt: "Ответ" };
+    case "deck":
+      return { w: 230, h: 270, dk: "36" };
+    case "random":
+      return { w: 250, h: 170, rm: "num", min: 1, max: 100 };
+    case "score":
+      return { w: 300, h: 190, pl: [{ id: "a", t: "Команда 1", c: "blue" }, { id: "b", t: "Команда 2", c: "red" }] };
+    case "turns":
+      return { w: 270, h: 220, pl: [{ id: "a", t: "Игрок 1", c: "blue" }, { id: "b", t: "Игрок 2", c: "red" }, { id: "c", t: "Игрок 3", c: "green" }], cur: 0, rn: 1 };
+    case "buzzer":
+      return { w: 230, h: 200, title: "Кто первый?" };
+    case "checklist":
+      return { w: 280, h: 200, fit: true, title: "Чек-лист", cl: [{ id: "a", t: "Первый пункт" }, { id: "b", t: "Второй пункт" }, { id: "c", t: "Третий пункт" }] };
+    case "input":
+      return { w: 260, h: 100, title: "Поле ввода", it: "text" };
+    case "calendar":
+      return { w: 300, h: 300 };
+    case "icon":
+      return { w: 120, h: 120, ic: "star" };
+    case "token":
+      return { w: 76, h: 76, tk: "pawn", color: "blue" };
+    case "words":
+      return { w: 360, h: 250, title: "Одно слово о встрече", max: 3 };
+    case "spoiler":
+      return { w: 280, h: 150, title: "Нажмите, чтобы открыть", bt: "Сюрприз! 🎉" };
   }
 }
 

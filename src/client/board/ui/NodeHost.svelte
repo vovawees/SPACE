@@ -39,6 +39,21 @@
   import TrackerNode from "../nodes/TrackerNode.svelte";
   import CalcNode from "../nodes/CalcNode.svelte";
   import GateNode from "../nodes/GateNode.svelte";
+  import StopwatchNode from "../nodes/StopwatchNode.svelte";
+  import CoinNode from "../nodes/CoinNode.svelte";
+  import FlipcardNode from "../nodes/FlipcardNode.svelte";
+  import DeckNode from "../nodes/DeckNode.svelte";
+  import RandomNode from "../nodes/RandomNode.svelte";
+  import ScoreNode from "../nodes/ScoreNode.svelte";
+  import TurnsNode from "../nodes/TurnsNode.svelte";
+  import BuzzerNode from "../nodes/BuzzerNode.svelte";
+  import ChecklistNode from "../nodes/ChecklistNode.svelte";
+  import InputNode from "../nodes/InputNode.svelte";
+  import CalendarNode from "../nodes/CalendarNode.svelte";
+  import IconNode from "../nodes/IconNode.svelte";
+  import TokenNode from "../nodes/TokenNode.svelte";
+  import WordsNode from "../nodes/WordsNode.svelte";
+  import SpoilerNode from "../nodes/SpoilerNode.svelte";
   import { playFx } from "../nodes/fx.ts";
   import { styleOf } from "../style.ts";
   import { untrack } from "svelte";
@@ -84,6 +99,21 @@
     tracker: TrackerNode,
     calc: CalcNode,
     gate: GateNode,
+    stopwatch: StopwatchNode,
+    coin: CoinNode,
+    flipcard: FlipcardNode,
+    deck: DeckNode,
+    random: RandomNode,
+    score: ScoreNode,
+    turns: TurnsNode,
+    buzzer: BuzzerNode,
+    checklist: ChecklistNode,
+    input: InputNode,
+    calendar: CalendarNode,
+    icon: IconNode,
+    token: TokenNode,
+    words: WordsNode,
+    spoiler: SpoilerNode,
   };
 
   const b = useBoard();

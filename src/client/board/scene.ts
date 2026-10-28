@@ -4,7 +4,7 @@
 import { fileUrl } from "./files.ts";
 import { pinScale } from "./nodes/comment.ts";
 import { aabb, intersects, type Rect } from "./geometry.ts";
-import { colorKey, COLORS, isHex } from "./model.ts";
+import { checkKey, colorKey, COLORS, isHex } from "./model.ts";
 import { dashArray, inkD, inkPx, shapeD, strokePx } from "./shapes.ts";
 import type { BoardStore, NodeView } from "./store.svelte.ts";
 
@@ -498,6 +498,21 @@ function drawNode(ctx: CanvasRenderingContext2D, s: BoardStore, v: NodeView, pal
     case "tracker":
     case "calc":
     case "gate":
+    case "stopwatch":
+    case "coin":
+    case "flipcard":
+    case "deck":
+    case "random":
+    case "score":
+    case "turns":
+    case "buzzer":
+    case "checklist":
+    case "input":
+    case "calendar":
+    case "icon":
+    case "token":
+    case "words":
+    case "spoiler":
       drawWidget(ctx, v, pal, z, c);
       break;
     case "task":
@@ -648,7 +663,7 @@ function drawWidget(ctx: CanvasRenderingContext2D, v: NodeView, pal: Palette, z:
   const p = v.props;
   const px = 1 / z;
   const accent = c === "default" ? pal.accent : pal.colors[c]!;
-  const round = v.type === "gate" || v.type === "wheel";
+  const round = v.type === "gate" || v.type === "wheel" || v.type === "token" || v.type === "icon";
   if (!round) {
     rr(ctx, r.x, r.y, r.w, r.h, v.type === "button" ? Math.min(r.h / 2, 18) : 14);
     ctx.fillStyle = fillOf(pal, v) ?? (v.type === "qr" ? "#ffffff" : c === "default" ? pal.card : pal.tinted[c]!);
@@ -836,6 +851,165 @@ function drawWidget(ctx: CanvasRenderingContext2D, v: NodeView, pal: Palette, z:
         ctx.fill();
       }
       bars(ctx, [12], r.x + 16, r.y + 10, r.w * 0.5, 22, r.y + 40, pal.ink4);
+      break;
+    }
+    case "stopwatch":
+    case "random": {
+      bars(ctx, [12], r.x + 16, r.y + 12, r.w * 0.5, 22, r.y + r.h, pal.ink4);
+      ctx.globalAlpha = A * 0.7;
+      bars(ctx, [v.type === "random" ? 4 : 8], cx - Math.min(r.w - 32, (v.type === "random" ? 4 : 8) * 0.42 * 46) / 2, r.y + r.h * 0.4, r.w - 32, Math.min(46, r.h * 0.4), r.y + r.h, accent);
+      ctx.globalAlpha = A;
+      break;
+    }
+    case "input": {
+      bars(ctx, [12], r.x + 16, r.y + 10, r.w * 0.5, 22, r.y + r.h, pal.ink4);
+      rr(ctx, r.x + 14, r.y + Math.min(44, r.h * 0.45), r.w - 28, Math.min(40, r.h * 0.4), 9);
+      ctx.fillStyle = pal.surface;
+      ctx.fill();
+      break;
+    }
+    case "flipcard":
+    case "spoiler": {
+      const on = !!p.on && !(v.type === "flipcard" ? p.self : p.sm === "self");
+      if (v.type === "spoiler" && !on) {
+        rr(ctx, r.x + 10, r.y + 10, r.w - 20, r.h - 20, 10);
+        ctx.fillStyle = accent;
+        ctx.globalAlpha = A * 0.35;
+        ctx.fill();
+        ctx.globalAlpha = A;
+      }
+      bars(ctx, [Math.max(4, Math.min(16, ((on ? p.bt : v.type === "flipcard" ? p.ft : p.title) ?? "").length))], cx - (r.w - 48) / 4, cy - 12, (r.w - 48) / 2, 24, r.y + r.h, on ? accent : pal.ink4);
+      break;
+    }
+    case "coin": {
+      const R = Math.max(4, Math.min(r.w, r.h - 50) * 0.36);
+      ctx.beginPath();
+      ctx.arc(cx, r.y + (r.h - 34) / 2 + 4, R, 0, Math.PI * 2);
+      ctx.fillStyle = pal.colors.yellow!;
+      ctx.fill();
+      ctx.lineWidth = Math.max(px, R * 0.08);
+      ctx.strokeStyle = pal.colors.orange!;
+      ctx.stroke();
+      break;
+    }
+    case "deck": {
+      const ch = Math.max(8, Math.min(r.h - 76, (r.w - 48) / 2 / 0.7));
+      const cw = ch * 0.7;
+      const y = r.y + 16;
+      for (let i = 2; i >= 0; i--) {
+        rr(ctx, cx - cw - 8 - i * 3, y + i * 2, cw, ch, cw * 0.1);
+        ctx.fillStyle = accent;
+        ctx.globalAlpha = A * (1 - i * 0.25);
+        ctx.fill();
+      }
+      ctx.globalAlpha = A;
+      rr(ctx, cx + 8, y, cw, ch, cw * 0.1);
+      ctx.fillStyle = "#ffffff";
+      ctx.fill();
+      ctx.lineWidth = px;
+      ctx.strokeStyle = pal.line;
+      ctx.stroke();
+      break;
+    }
+    case "score":
+    case "turns":
+    case "checklist": {
+      bars(ctx, [12], r.x + 16, r.y + 10, r.w * 0.5, 22, r.y + r.h, pal.ink4);
+      const list = (v.type === "checklist" ? p.cl : p.pl) ?? [];
+      const n = Math.max(1, Math.min(10, list.length || 3));
+      const lh = Math.min(32, (r.h - 52) / n);
+      const raw = p as Record<string, unknown>;
+      for (let i = 0; i < n; i++) {
+        const y = r.y + 42 + i * lh;
+        if (y + lh > r.y + r.h - 4) break;
+        const it = list[i] as { id: string; c?: string } | undefined;
+        const s = lh * 0.6;
+        rr(ctx, r.x + 16, y + lh * 0.2, s, s, v.type === "checklist" ? s * 0.25 : s / 2);
+        ctx.fillStyle =
+          v.type === "checklist" ? (it && raw[checkKey(it.id)] ? accent : pal.surface) : (pal.colors[palKey(pal, it?.c ?? COLORS[(i % 8) + 2]!)] ?? accent);
+        ctx.fill();
+        bars(ctx, [10], r.x + 22 + s, y, r.w - 56 - s, lh, r.y + r.h, v.type === "turns" && i === (p.cur ?? 0) ? accent : pal.ink4);
+      }
+      break;
+    }
+    case "buzzer": {
+      const R = Math.max(4, Math.min(r.w * 0.3, (r.h - 60) * 0.42));
+      ctx.beginPath();
+      ctx.arc(cx, r.y + 36 + R, R, 0, Math.PI * 2);
+      ctx.fillStyle = c === "default" ? pal.colors.red! : accent;
+      ctx.fill();
+      break;
+    }
+    case "calendar": {
+      bars(ctx, [10], r.x + 16, r.y + 10, r.w * 0.5, 22, r.y + r.h, pal.ink4);
+      const cw = (r.w - 28) / 7;
+      const ch = Math.min(cw, (r.h - 56) / 6);
+      const raw = Object.keys(p as Record<string, unknown>);
+      const now = new Date();
+      const ym = /^\d{4}-\d{2}$/.test(p.ym ?? "") ? p.ym! : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+      const marked = new Set(raw.filter((k) => k.startsWith(`k:${ym}-`)).map((k) => Number(k.slice(10, 12))));
+      ctx.beginPath();
+      for (let i = 0; i < 35; i++) {
+        if (marked.has(i + 1)) continue;
+        ctx.rect(r.x + 14 + (i % 7) * cw + 2, r.y + 48 + Math.floor(i / 7) * ch + 2, cw - 4, ch - 4);
+      }
+      ctx.fillStyle = pal.surface;
+      ctx.fill();
+      ctx.beginPath();
+      for (const d of marked) {
+        const i = d - 1;
+        if (i < 35) ctx.rect(r.x + 14 + (i % 7) * cw + 2, r.y + 48 + Math.floor(i / 7) * ch + 2, cw - 4, ch - 4);
+      }
+      ctx.fillStyle = accent;
+      ctx.fill();
+      break;
+    }
+    case "words": {
+      bars(ctx, [14], r.x + 16, r.y + 10, r.w * 0.6, 22, r.y + r.h, pal.ink4);
+      const sizes = [22, 14, 30, 16, 12, 20, 18, 12];
+      let x = r.x + 18;
+      let y = r.y + 48;
+      ctx.globalAlpha = A * 0.75;
+      for (let i = 0; i < sizes.length; i++) {
+        const h = sizes[i]!;
+        const w = h * (2.2 + (i % 3) * 0.6);
+        if (x + w > r.x + r.w - 16) {
+          x = r.x + 18;
+          y += 36;
+        }
+        if (y + h > r.y + r.h - 10) break;
+        rr(ctx, x, y + (30 - h) / 2, w, h * 0.6, h * 0.2);
+        ctx.fillStyle = pal.colors[COLORS[(i % 8) + 2]!]!;
+        ctx.fill();
+        x += w + 10;
+      }
+      ctx.globalAlpha = A;
+      break;
+    }
+    case "icon": {
+      const R = Math.min(r.w, r.h) * 0.36;
+      ctx.beginPath();
+      for (let i = 0; i < 10; i++) {
+        const a = -Math.PI / 2 + (i * Math.PI) / 5;
+        const rad = i % 2 ? R * 0.45 : R;
+        ctx.lineTo(cx + Math.cos(a) * rad, cy + Math.sin(a) * rad);
+      }
+      ctx.closePath();
+      ctx.lineWidth = Math.max(px, R * 0.12);
+      ctx.lineJoin = "round";
+      ctx.strokeStyle = c === "default" ? pal.ink : accent;
+      ctx.stroke();
+      break;
+    }
+    case "token": {
+      const R = Math.min(r.w, r.h) / 2 - 3;
+      ctx.beginPath();
+      ctx.arc(cx, cy, R, 0, Math.PI * 2);
+      ctx.fillStyle = fillOf(pal, v) ?? (c === "default" ? pal.colors.blue! : accent);
+      ctx.fill();
+      ctx.lineWidth = Math.max(px, 2);
+      ctx.strokeStyle = pal.card;
+      ctx.stroke();
       break;
     }
     case "gate": {

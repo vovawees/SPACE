@@ -6,7 +6,8 @@
   import { untrack } from "svelte";
   import { focusSelect } from "../../ui/portal.ts";
   import { useBoard } from "../board.svelte.ts";
-  import { counterAdd, counterSet, counterValue } from "./games.ts";
+  import { counterAdd, counterBounds, counterSet, counterValue } from "./games.ts";
+  import { playSound } from "./sound.ts";
   import type { NodeCompProps } from "./types.ts";
 
   let { v, sel }: NodeCompProps = $props();
@@ -14,6 +15,7 @@
   const p = $derived(v.props);
   const total = $derived(counterValue(p));
   const step = $derived(p.step ?? 1);
+  const bounds = $derived(counterBounds(p));
   const k = $derived(Math.max(0.45, Math.min(v.w / 200, v.h / 150)));
   const renaming = $derived(b.ix.renaming === v.id);
   let typing = $state(false);
@@ -23,7 +25,7 @@
   function bump(e: MouseEvent, dir: 1 | -1) {
     e.stopPropagation();
     if (b.readonly) return;
-    counterAdd(b, v, dir * step * (e.shiftKey ? 10 : 1));
+    if (counterAdd(b, v, dir * step * (e.shiftKey ? 10 : 1))) playSound("click");
   }
 
   // число «подпрыгивает» при любом изменении — и своём, и чужом
@@ -79,7 +81,7 @@
     {/if}
   </div>
   <div class="counter-row">
-    <button class="counter-btn" data-ui disabled={b.readonly} aria-label="Минус {step}" onclick={(e) => bump(e, -1)}><Minus size={20} strokeWidth={2.4} /></button>
+    <button class="counter-btn" data-ui disabled={b.readonly || total <= bounds[0]} aria-label="Минус {step}" onclick={(e) => bump(e, -1)}><Minus size={20} strokeWidth={2.4} /></button>
     {#if typing}
       <input class="counter-input" data-ui inputmode="decimal" value={fmt(total)} {@attach focusSelect} onblur={commitValue} onkeydown={(e) => onkey(e, commitValue)} />
     {:else}
@@ -90,7 +92,15 @@
         </div>
       {/key}
     {/if}
-    <button class="counter-btn" data-ui disabled={b.readonly} aria-label="Плюс {step}" onclick={(e) => bump(e, 1)}><Plus size={20} strokeWidth={2.4} /></button>
+    <button class="counter-btn" data-ui disabled={b.readonly || total >= bounds[1]} aria-label="Плюс {step}" onclick={(e) => bump(e, 1)}><Plus size={20} strokeWidth={2.4} /></button>
   </div>
-  {#if step !== 1}<div class="counter-step">шаг {fmt(step)}</div>{/if}
+  {#if p.unit || step !== 1 || Number.isFinite(bounds[0]) || Number.isFinite(bounds[1])}
+    <div class="counter-step">
+      {#if p.unit}<span class="counter-unit">{p.unit}</span>{/if}
+      {#if step !== 1}<span>шаг {fmt(step)}</span>{/if}
+      {#if Number.isFinite(bounds[0]) || Number.isFinite(bounds[1])}
+        <span>{Number.isFinite(bounds[0]) ? fmt(bounds[0]) : "−∞"}…{Number.isFinite(bounds[1]) ? fmt(bounds[1]) : "∞"}</span>
+      {/if}
+    </div>
+  {/if}
 </div>

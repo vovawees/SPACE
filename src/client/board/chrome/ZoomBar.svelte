@@ -13,11 +13,17 @@
   import { nextZoom } from "../camera.svelte.ts";
   import { toggleSnap } from "../keys.ts";
   import { zoomToFit, zoomToSelection } from "../ops.ts";
+  import { MediaQuery } from "svelte/reactivity";
+  import { bottom, measure, zoomLifted } from "./bottom.svelte.ts";
 
   const b = useBoard();
   const cam = b.camera;
   const s = b.store;
   const pct = $derived(Math.round(cam.z * 100));
+  const compact = new MediaQuery("max-width: 640px");
+  const lifted = $derived(zoomLifted(b.inset.right));
+  /** Открытая библиотека занимает низ экрана — масштаб под ней не нужен. */
+  const covered = $derived(session.settings.library && !b.readonly && (compact.current || lifted));
 
   function zoomMenu(e: MouseEvent) {
     menu.dropdown(
@@ -38,7 +44,7 @@
   }
 </script>
 
-<div class="zoom panel">
+<div class="zoom panel" class:lifted class:covered {@attach measure((w) => (bottom.zoomW = w))}>
   {#if !b.readonly}
     <button class="icon-btn" aria-label="Отменить" disabled={!s.canUndo} onclick={() => s.undo.undo()} {@attach tip("Отменить", "Mod+Z", "top")}>
       <Undo2 size={17} />
@@ -83,6 +89,9 @@
     position: fixed;
     left: 10px;
     bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    transition:
+      bottom 160ms var(--ease-out),
+      opacity 160ms var(--ease-out);
     display: flex;
     align-items: center;
     gap: 1px;
@@ -107,15 +116,20 @@
     background: var(--hover);
     color: var(--ink);
   }
-  @media (max-width: 1100px) {
-    .zoom {
-      bottom: calc(70px + env(safe-area-inset-bottom, 0px));
-    }
+  .zoom.covered {
+    opacity: 0;
+    pointer-events: none;
+  }
+  /* рядом с инструментами не помещается — встаёт над ними */
+  .zoom.lifted {
+    bottom: calc(var(--toast-bottom, 86px) - 16px + env(safe-area-inset-bottom, 0px));
   }
   @media (max-width: 640px) {
-    .zoom {
+    /* над инструментами, а если открыта полоса стиля — и над ней */
+    .zoom,
+    .zoom.lifted {
       left: 8px;
-      bottom: calc(66px + env(safe-area-inset-bottom, 0px));
+      bottom: calc(var(--toast-bottom, 86px) - 20px + env(safe-area-inset-bottom, 0px));
     }
     .zoom-only {
       display: none;

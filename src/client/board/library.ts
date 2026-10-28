@@ -12,6 +12,7 @@ import { emptyTable } from "./nodes/table.svelte.ts";
 import { insertClip, place } from "./ops.ts";
 import { shapeGlyph } from "./shapes.ts";
 import { TEMPLATES, templateThumb } from "./templates.ts";
+import { TYPE_ICONS } from "./typeInfo.ts";
 import Code from "@lucide/svelte/icons/square-code";
 import FrameIcon from "@lucide/svelte/icons/frame";
 import ListChecks from "@lucide/svelte/icons/list-checks";
@@ -46,11 +47,12 @@ import Globe from "@lucide/svelte/icons/globe";
 
 export const LIB_MIME = "application/x-space-lib";
 
-export type LibCat = "basic" | "widgets" | "shapes" | "stickers" | "templates" | "services";
+export type LibCat = "basic" | "widgets" | "games" | "shapes" | "stickers" | "templates" | "services";
 
 export const LIB_CATS: { id: LibCat; label: string }[] = [
   { id: "basic", label: "Объекты" },
   { id: "widgets", label: "Виджеты и логика" },
+  { id: "games", label: "Игры и встречи" },
   { id: "shapes", label: "Фигуры" },
   { id: "stickers", label: "Стикеры" },
   { id: "templates", label: "Шаблоны" },
@@ -95,7 +97,7 @@ const BASIC: LibItem[] = [
   { id: "note", cat: "basic", label: "Заметка", words: "стикер карточка текст", icon: StickyNote },
   { id: "text", cat: "basic", label: "Текст", words: "надпись заголовок", icon: Type },
   { id: "task", cat: "basic", label: "Задача", words: "дело todo срок исполнитель", icon: SquareCheck },
-  { id: "checklist", cat: "basic", label: "Список дел", words: "чеклист задачи todo", icon: ListChecks },
+  { id: "checklist", cat: "basic", label: "Чек-лист", words: "список дел чеклист задачи todo пункты галочки", desc: "Пункты с галочками и полосой готовности", icon: ListChecks },
   { id: "table", cat: "basic", label: "Таблица", words: "сетка ячейки excel csv", icon: Table2 },
   { id: "poll", cat: "basic", label: "Опрос", words: "голосование выбор vote", icon: Vote },
   { id: "timer", cat: "basic", label: "Таймер", words: "время обратный отсчёт секундомер", icon: Timer },
@@ -128,6 +130,25 @@ const WIDGETS: LibItem[] = [
   { id: "qr", cat: "widgets", label: "QR-код", words: "qr код ссылка телефон сканировать", icon: QrCode },
 ];
 
+const gi = (t: NodeType) => TYPE_ICONS[t] as Icon;
+
+const GAMES: LibItem[] = [
+  { id: "coin", cat: "games", label: "Монетка", words: "орёл решка жребий подбросить случай игра", desc: "Орёл или решка — с броском и звуком", icon: gi("coin") },
+  { id: "deck", cat: "games", label: "Колода карт", words: "карты 36 52 таро тянуть перемешать игра покер дурак", desc: "Тяните карты, мешайте, своя колода", icon: gi("deck") },
+  { id: "random", cat: "games", label: "Случайный выбор", words: "рандом жребий число кто вариант генератор лотерея", desc: "Число, вариант из списка или участник", icon: gi("random") },
+  { id: "score", cat: "games", label: "Табло счёта", words: "очки счёт команды игроки баллы лидер турнир", desc: "Команды и очки, лидер с короной", icon: gi("score") },
+  { id: "turns", cat: "games", label: "Очередь ходов", words: "ход очередь игрок раунд порядок кто ходит", desc: "Чей ход и какой раунд", icon: gi("turns") },
+  { id: "buzzer", cat: "games", label: "Кто первый", words: "кнопка викторина своя игра buzzer реакция первый", desc: "Кнопка для викторин: кто нажал раньше", icon: gi("buzzer") },
+  { id: "flipcard", cat: "games", label: "Карточка-перевёртыш", words: "вопрос ответ флеш карта учить переворот", desc: "Вопрос спереди, ответ сзади", icon: gi("flipcard") },
+  { id: "spoiler", cat: "games", label: "Сюрприз", words: "спойлер скрыто секрет открыть подарок тайна", desc: "Скрытый текст — открывается нажатием", icon: gi("spoiler") },
+  { id: "token", cat: "games", label: "Фишка", words: "пешка фигура игрок метка настольная игра карта", desc: "Двигайте по карте или полю", icon: gi("token") },
+  { id: "stopwatch", cat: "games", label: "Секундомер", words: "время круг замер старт стоп лап", desc: "С кругами и общим временем", icon: gi("stopwatch") },
+  { id: "words", cat: "games", label: "Облако слов", words: "слова ассоциации опрос мнения ретро встреча", desc: "Каждый пишет слово — растёт облако", icon: gi("words") },
+  { id: "calendar", cat: "games", label: "Календарь", words: "месяц дни даты отметки кто когда может планирование", desc: "Отмечайте дни — видно, кто когда может", icon: gi("calendar") },
+  { id: "input", cat: "games", label: "Поле ввода", words: "ввод текст число значение форма ответ логика", desc: "Общее поле: текст или число для логики", icon: gi("input") },
+  { id: "icon", cat: "games", label: "Значок", words: "иконка пиктограмма символ значок картинка", desc: "Больше сотни значков любого цвета", icon: gi("icon") },
+];
+
 const SHAPES: LibItem[] = SHAPE_KINDS.map((k) => ({ id: `shape:${k}`, cat: "shapes" as const, label: SHAPE_LABELS[k], words: "фигура блок-схема", svg: shapeGlyph(k, 26, 1.6) }));
 
 const STICKERS: LibItem[] = EMOJI_GROUPS.flatMap((g) => g.list.map((e) => ({ id: `sticker:${e}`, cat: "stickers" as const, label: e, words: g.name.toLowerCase(), emoji: e })));
@@ -153,7 +174,7 @@ const SERVICES: LibItem[] = (
   ] as const
 ).map(([id, label, desc, url]) => ({ id: `svc:${id}`, cat: "services" as const, label, desc, url, svg: brandSvg(id, 22), words: "ссылка интеграция встроить " + id, ask: "url" as const }));
 
-export const LIB_ITEMS: LibItem[] = [...BASIC, ...WIDGETS, ...SHAPES, ...STICKERS, ...TPL, ...SERVICES];
+export const LIB_ITEMS: LibItem[] = [...BASIC, ...WIDGETS, ...GAMES, ...SHAPES, ...STICKERS, ...TPL, ...SERVICES];
 
 export function libItem(id: string): LibItem | undefined {
   return LIB_ITEMS.find((i) => i.id === id);
@@ -250,7 +271,7 @@ export function insertLib(b: Board, id: string, at: Pt, opts: { drop?: boolean }
     case "task":
       return mk("task");
     case "checklist":
-      return { ...mk("note", { text: "**Список дел**\n- [ ] Первое\n- [ ] Второе\n- [ ] Третье", color: b.style.color, w: 280 }), edit: undefined };
+      return { ...mk("checklist", { color: b.style.color }), edit: undefined };
     case "table":
       return mk("table", emptyTable(3, 3) as Partial<NodeData>);
     case "poll":
@@ -283,6 +304,20 @@ export function insertLib(b: Board, id: string, at: Pt, opts: { drop?: boolean }
     case "chart":
     case "calc":
     case "gate":
+    case "stopwatch":
+    case "coin":
+    case "flipcard":
+    case "deck":
+    case "random":
+    case "score":
+    case "turns":
+    case "buzzer":
+    case "input":
+    case "calendar":
+    case "icon":
+    case "token":
+    case "words":
+    case "spoiler":
       return { ...mk(id), edit: undefined };
     case "pie":
       return mk("chart", { ct: "donut", w: 360, h: 240 });

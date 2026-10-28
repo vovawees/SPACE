@@ -3,6 +3,7 @@
      наступает — у всех, кто смотрит, салют. */
   import { useBoard } from "../board.svelte.ts";
   import { playFx } from "./fx.ts";
+  import { playSound } from "./sound.ts";
   import TitleEdit from "./TitleEdit.svelte";
   import type { NodeCompProps } from "./types.ts";
   import { countdownParts, localInput } from "./widgets.ts";
@@ -30,6 +31,8 @@
       clearInterval(timer);
       const host = el?.closest<HTMLElement>(".node");
       if (host && document.visibilityState === "visible") playFx(host, "confetti");
+      const snd = v.props.snd;
+      if (snd && snd !== "none") playSound(snd);
     }, 250);
     return () => clearInterval(timer);
   });
@@ -52,7 +55,7 @@
   {#if at === null}
     <div class="cd-empty">Когда?</div>
   {:else if done}
-    <div class="cd-done">Наступило! 🎉</div>
+    <div class="cd-done">{p.endt?.trim() || "Наступило! 🎉"}</div>
   {:else}
     <div class="cd-row">
       {#if c.d}<div class="cd-box"><b>{c.d}</b><span>дн</span></div>{/if}

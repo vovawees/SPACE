@@ -11,8 +11,7 @@
   import SettingsDialog from "../ui/SettingsDialog.svelte";
   import { Board, provideBoard } from "./board.svelte.ts";
   import ContextBar from "./chrome/ContextBar.svelte";
-  import LogicPanel from "./chrome/LogicPanel.svelte";
-  import StylePanel from "./chrome/StylePanel.svelte";
+  import Inspector from "./chrome/Inspector.svelte";
   import Chat from "./chrome/Chat.svelte";
   import CommentThread from "./chrome/CommentThread.svelte";
   import HistoryPanel from "./chrome/HistoryPanel.svelte";
@@ -227,12 +226,7 @@
   <Library />
   <Toolbar />
   <ContextBar />
-  {#if b.ui.style}
-    <StylePanel />
-  {/if}
-  {#if b.ui.logic}
-    <LogicPanel />
-  {/if}
+  <Inspector />
   <ZoomBar />
   {#if session.settings.minimap}
     <Minimap />

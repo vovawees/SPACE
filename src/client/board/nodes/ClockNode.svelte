@@ -50,7 +50,9 @@
       <circle cx="50" cy="50" r="2.6" class="clk-dot" />
     </svg>
   {:else}
-    <div class="clk-time">{pad(t.h)}<span class="clk-colon">:</span>{pad(t.m)}{#if secs}<span class="clk-sec">{pad(t.s)}</span>{/if}</div>
-    {#if v.h >= 104}<div class="clk-date">{t.date}</div>{/if}
+    <div class="clk-time">
+      {p.h12 ? (t.h + 11) % 12 + 1 : pad(t.h)}<span class="clk-colon">:</span>{pad(t.m)}{#if secs}<span class="clk-sec">{pad(t.s)}</span>{/if}{#if p.h12}<span class="clk-ampm">{t.h < 12 ? "AM" : "PM"}</span>{/if}
+    </div>
+    {#if p.date ?? v.h >= 104}<div class="clk-date">{t.date}</div>{/if}
   {/if}
 </div>

@@ -1,27 +1,23 @@
 <script lang="ts">
-  /* Оформление выделенного: готовые наборы, заливка и градиент, цвет текста,
+  /* Вкладка «Оформление»: готовые наборы, заливка и градиент, цвет текста,
      обводка, углы, тень, прозрачность, анимация, отражение, фильтр и метка.
-     Всё применяется сразу и отменяется Ctrl+Z. На телефоне — листом снизу. */
-  import { computePosition, flip, offset, shift, size } from "@floating-ui/dom";
+     Всё применяется сразу и отменяется Ctrl+Z. */
   import ClipboardPaste from "@lucide/svelte/icons/clipboard-paste";
   import Copy from "@lucide/svelte/icons/copy";
-  import Plus from "@lucide/svelte/icons/plus";
   import RotateCcw from "@lucide/svelte/icons/rotate-ccw";
   import X from "@lucide/svelte/icons/x";
-  import { untrack } from "svelte";
-  import { MediaQuery } from "svelte/reactivity";
-  import { hexToRgb, hsvToHex, rgbToHsv } from "../../lib/color.ts";
-  import { pickColor, picker } from "../../ui/colorpick.svelte.ts";
-  import { useBoard } from "../board.svelte.ts";
-  import { COLORS, COLOR_ITEMS, colorCss, isHex, type NodeData, type NodeProps, type NodeType } from "../model.ts";
-  import type { NodeView } from "../store.svelte.ts";
-  import { BORDERS, EFFECTS, FILTERS, PRESETS, SHADOWS, canBox, canFill, canFilter, canFlip, copiedStyle, copyStyle, pasteStyle, resetStyle, type BorderStyle, type Preset, type Shadow } from "../style.ts";
+  import { hexToRgb, hsvToHex, rgbToHsv } from "../../../lib/color.ts";
+  import { pickColor } from "../../../ui/colorpick.svelte.ts";
+  import { useBoard } from "../../board.svelte.ts";
+  import { COLORS, colorCss, isHex, type NodeData, type NodeProps, type NodeType } from "../../model.ts";
+  import type { NodeView } from "../../store.svelte.ts";
+  import { BORDERS, EFFECTS, FILTERS, PRESETS, SHADOWS, canBox, canFill, canFilter, canFlip, copiedStyle, copyStyle, pasteStyle, resetStyle, type BorderStyle, type Preset, type Shadow } from "../../style.ts";
+  import ColorDots from "./ColorDots.svelte";
 
+  let { views }: { views: NodeView[] } = $props();
   const b = useBoard();
   const s = $derived(b.view);
-  const sheet = new MediaQuery("(max-width: 640px)");
 
-  const views = $derived(s.selected().filter((v) => v.type !== "comment"));
   const p = $derived<NodeProps>(views[0]?.props ?? {});
   const any = (f: (t: NodeType) => boolean) => views.some((v) => f(v.type));
   const fillOk = $derived(any(canFill));
@@ -31,11 +27,6 @@
   const filterOk = $derived(any(canFilter));
   const tagOk = $derived(views.some((v) => v.type !== "path" && v.type !== "ink"));
   const shadowOk = $derived(views.some((v) => v.type !== "path" && v.type !== "frame"));
-
-  // пусто — закрыть
-  $effect(() => {
-    if (!views.length || b.readonly) untrack(() => (b.ui.style = null));
-  });
 
   /* ------------------------------ запись ------------------------------ */
 
@@ -73,14 +64,6 @@
   };
 
   /* ------------------------------ цвета ------------------------------ */
-
-  const PALETTE = COLOR_ITEMS.filter((c) => c.value !== "default");
-  const NEUTRAL = [
-    { value: "#ffffff", css: "#ffffff", label: "Белый" },
-    { value: "#111113", css: "#111113", label: "Чёрный" },
-  ];
-  const SW = [...PALETTE, ...NEUTRAL];
-  const known = (c: string | undefined) => !!c && SW.some((x) => x.value === c);
 
   const under = (e: MouseEvent) => {
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -150,75 +133,8 @@
   }
 
   let clipSeq = $state(0);
-  const hasClip = $derived(clipSeq >= 0 && b.ui.style ? !!copiedStyle() : false);
-
-  /* ------------------------------ место ------------------------------ */
-
-  const PAD = { top: 64, bottom: 76, left: 8, right: 8 };
-  let panel = $state<HTMLDivElement>();
-  $effect(() => {
-    const at = b.ui.style;
-    const el = panel;
-    if (!at || !el) return;
-    if (sheet.current) {
-      el.style.left = "";
-      el.style.top = "";
-      el.style.maxHeight = "";
-      el.dataset.shown = "";
-      // лист закрывает низ экрана — подвинуть доску, чтобы объект остался виден над ним
-      const raf = requestAnimationFrame(() => {
-        const r = untrack(() => s.boundsOfIds(s.selection.ids));
-        if (r) b.camera.revealBand(r, 64, b.camera.vh - el.getBoundingClientRect().top + 8);
-      });
-      return () => cancelAnimationFrame(raf);
-    }
-    const anchor = { getBoundingClientRect: () => ({ x: at.x, y: at.y, left: at.x, top: at.y, right: at.x, bottom: at.y, width: 0, height: 0 }) };
-    void computePosition(anchor, el, { placement: "bottom-start", strategy: "fixed", middleware: [
-        offset(8),
-        flip({ padding: PAD }),
-        // Не выше свободного места: длинная панель прокручивается и не заезжает под нижнюю панель инструментов.
-        size({ padding: PAD, apply: ({ availableHeight, elements }) => void (elements.floating.style.maxHeight = `${Math.round(Math.max(260, Math.min(640, availableHeight)))}px`) }),
-        shift({ padding: PAD, crossAxis: true }),
-      ] }).then(({ x, y }) => {
-      el.style.left = `${Math.round(x)}px`;
-      el.style.top = `${Math.round(y)}px`;
-      el.dataset.shown = "";
-    });
-  });
-
-  function key(e: KeyboardEvent) {
-    if (e.key !== "Escape" || picker.open) return;
-    e.preventDefault();
-    e.stopPropagation();
-    b.ui.style = null;
-  }
+  const hasClip = $derived(clipSeq >= 0 ? !!copiedStyle() : false);
 </script>
-
-<svelte:window onkeydowncapture={key} />
-
-{#snippet colors(cur: string | undefined, apply: (c: string | undefined) => void, title: string, none: string, extra?: { value: string; css: string; label: string })}
-  <div class="sp-colors" role="radiogroup" aria-label={title}>
-    <button type="button" class="sp-dot none" class:on={!cur} role="radio" aria-checked={!cur} aria-label={none} title={none} onclick={() => apply(undefined)}></button>
-    {#if extra}
-      <button type="button" class="sp-dot clear" class:on={cur === extra.value} role="radio" aria-checked={cur === extra.value} aria-label={extra.label} title={extra.label} onclick={() => apply(extra.value)}></button>
-    {/if}
-    {#each SW as c (c.value)}
-      <button type="button" class="sp-dot" class:on={cur === c.value} style:--sw={c.css} role="radio" aria-checked={cur === c.value} aria-label={c.label} title={c.label} onclick={() => apply(c.value)}></button>
-    {/each}
-    <button
-      type="button"
-      class="sp-dot custom"
-      class:on={!!cur && isHex(cur) && !known(cur)}
-      style:--sw={cur && isHex(cur) && !known(cur) ? cur : null}
-      aria-label="Свой цвет"
-      title="Свой цвет"
-      onclick={(e) => pickColor(cur, under(e), (hex) => apply(hex), { title })}
-    >
-      {#if !(cur && isHex(cur) && !known(cur))}<Plus size={13} />{/if}
-    </button>
-  </div>
-{/snippet}
-
 {#snippet chips(list: [string, string][], cur: string | undefined, apply: (v: string) => void, label: string)}
   <div class="sp-chips" role="radiogroup" aria-label={label}>
     {#each list as [val, text] (val)}
@@ -227,22 +143,7 @@
   </div>
 {/snippet}
 
-{#if b.ui.style && views.length}
-  <div
-    class="sp panel"
-    class:sheet={sheet.current}
-    bind:this={panel}
-    role="dialog"
-    aria-label="Оформление"
-    tabindex="-1"
-    onpointerdown={(e) => e.stopPropagation()}
-    onwheel={(e) => e.stopPropagation()}
-  >
-    <header class="sp-head">
-      <span class="sp-title">Оформление{views.length > 1 ? ` · ${views.length}` : ""}</span>
-      <button type="button" class="chip" aria-label="Закрыть" onclick={() => (b.ui.style = null)}><X size={15} /></button>
-    </header>
-
+<div class="sp">
     <div class="sp-body">
       {#if fillOk || boxOk}
         <section>
@@ -271,7 +172,7 @@
       {#if fillOk}
         <section>
           <h4>Заливка</h4>
-          {@render colors(p.fc, setFill, "Заливка", "Как обычно", { value: "transparent", css: "transparent", label: "Прозрачная" })}
+          <ColorDots cur={p.fc} apply={setFill} title="Заливка" extra={{ value: "transparent", css: "transparent", label: "Прозрачная" }} />
           {#if p.fc && p.fc !== "transparent"}
             <label class="sp-row">
               <span>Градиент</span>
@@ -282,7 +183,7 @@
                 <span>Второй цвет</span>
                 <button
                   type="button"
-                  class="sp-dot big"
+                  class="in-dot big"
                   style:--sw={colorCss(p.fc2)}
                   aria-label="Второй цвет"
                   onclick={(e) => pickColor(p.fc2, under(e), (hex) => set({ fc2: hex }, (v) => canFill(v.type)), { title: "Второй цвет" })}
@@ -311,14 +212,14 @@
       {#if fillOk || views.some((v) => v.type === "text" || v.type === "shape")}
         <section>
           <h4>Цвет текста</h4>
-          {@render colors(p.tc, (c) => set({ tc: c }), "Цвет текста", "Авто")}
+          <ColorDots cur={p.tc} apply={(c) => set({ tc: c })} title="Цвет текста" none="Авто" />
         </section>
       {/if}
 
       {#if boxOk}
         <section>
           <h4>Обводка</h4>
-          {@render colors(p.bc, setBorder, "Обводка", "Как обычно")}
+          <ColorDots cur={p.bc} apply={setBorder} title="Обводка" />
           {#if p.bc || typeof p.bw === "number"}
             <div class="sp-slider">
               <span>Толщина</span>
@@ -438,7 +339,7 @@
             {/each}
           </div>
           {#if p.tag}
-            {@render colors(p.tagc, (c) => set({ tagc: c }), "Цвет метки", "Как обычно")}
+            <ColorDots cur={p.tagc} apply={(c) => set({ tagc: c })} title="Цвет метки" />
           {/if}
         </section>
       {/if}
@@ -460,57 +361,11 @@
       <span class="sp-sp"></span>
       <button type="button" class="btn ghost sm" onclick={() => resetStyle(b, views.map((v) => v.id))} title="Сбросить оформление"><RotateCcw size={14} /> Сбросить</button>
     </footer>
-  </div>
-{/if}
+</div>
 
 <style>
-  .sp {
-    position: fixed;
-    left: 0;
-    top: 0;
-    width: 300px;
-    max-height: min(calc(100dvh - 150px), 640px);
-    display: flex;
-    flex-direction: column;
-    visibility: hidden;
-    z-index: 2;
-  }
-  .sp:global([data-shown]) {
-    visibility: visible;
-    animation: sp-in 150ms var(--ease-out);
-  }
-  @keyframes sp-in {
-    from {
-      opacity: 0;
-      translate: 0 4px;
-    }
-  }
-  .sp.sheet {
-    left: 8px !important;
-    right: 8px;
-    top: auto !important;
-    bottom: calc(8px + env(safe-area-inset-bottom, 0px));
-    width: auto;
-    max-height: 62dvh;
-  }
-  .sp-head {
-    display: flex;
-    align-items: center;
-    padding: 8px 8px 4px 14px;
-  }
-  .sp-title {
-    flex: 1;
-    font-size: 12px;
-    font-weight: 640;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: var(--ink-3);
-  }
   .sp-body {
-    overflow-y: auto;
-    overscroll-behavior: contain;
     padding: 0 14px 6px;
-    scrollbar-width: thin;
   }
   section {
     padding: 8px 0;
@@ -526,53 +381,6 @@
     font-size: 12px;
     font-weight: 600;
     color: var(--ink-2);
-  }
-  .sp-colors {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-  .sp-dot {
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
-    background: var(--sw, var(--surface-3));
-    box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.2);
-    display: grid;
-    place-items: center;
-    color: var(--ink-2);
-    transition: transform var(--t-fast) var(--ease-out);
-  }
-  .sp-dot:hover {
-    transform: scale(1.12);
-  }
-  .sp-dot.on {
-    box-shadow:
-      0 0 0 2px var(--panel),
-      0 0 0 4px var(--accent);
-  }
-  .sp-dot.none {
-    background: linear-gradient(135deg, transparent 46%, var(--danger) 46% 54%, transparent 54%), var(--surface-2);
-    box-shadow: inset 0 0 0 1.5px var(--line-3);
-  }
-  .sp-dot.none.on,
-  .sp-dot.clear.on {
-    box-shadow:
-      inset 0 0 0 1.5px var(--line-3),
-      0 0 0 2px var(--panel),
-      0 0 0 4px var(--accent);
-  }
-  .sp-dot.clear {
-    background: repeating-conic-gradient(var(--surface-3) 0 25%, var(--surface-1) 0 50%) 0 0 / 8px 8px;
-    box-shadow: inset 0 0 0 1.5px var(--line-3);
-  }
-  .sp-dot.custom:not([style]) {
-    background: conic-gradient(var(--c-red), var(--c-yellow), var(--c-green), var(--c-blue), var(--c-violet), var(--c-red));
-    color: #fff;
-  }
-  .sp-dot.big {
-    width: 26px;
-    height: 26px;
   }
   .sp-chips {
     display: flex;
@@ -679,6 +487,9 @@
     white-space: nowrap;
   }
   .sp-foot {
+    position: sticky;
+    bottom: 0;
+    background: var(--panel);
     display: flex;
     align-items: center;
     gap: 2px;
@@ -692,10 +503,6 @@
     flex: 1;
   }
   @media (pointer: coarse) {
-    .sp-dot {
-      width: 30px;
-      height: 30px;
-    }
     .sp-chip {
       height: 34px;
       padding: 0 12px;

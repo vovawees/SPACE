@@ -47,7 +47,7 @@
   import { headGlyph, routeOf } from "../connector.ts";
   import { DASHES, FILLS, HEAD_SIZES, ROUTES, SIZES, TEXT_SIZES, choice, fontItems, headChoice, langItems, nodeMenu, reversePath, setRoute, stickerItems } from "../menus.ts";
   import { PRIO_CSS, assigneeItems, counterItems, diceItems, dueItems, loadMembers, prioItems, progressItems, resetVotes, tableItems, timerItems, timerShort, toggleDone } from "../nodes/actions.ts";
-  import { counterSet, counterValue, rollDice } from "../nodes/games.ts";
+  import { counterReset, counterSet, counterValue, diceCount, diceSides, rollDice } from "../nodes/games.ts";
   import { votesOf } from "../nodes/poll.ts";
   import { dueInfo } from "../nodes/task.ts";
   import {
@@ -84,10 +84,15 @@
   const locked = $derived(views.length > 0 && views.every((v) => v.locked));
   const editingCode = $derived(!!s.editing && s.get(s.editing)?.type === "code");
 
+  /* на телефоне панель не летает за выделением, а стоит внизу над инструментами */
+  const narrow = new MediaQuery("max-width: 640px");
+  const coarse = new MediaQuery("pointer: coarse");
+  const docked = $derived(narrow.current);
+
   // контекстное меню у точки (правая кнопка, «что поставить на конце») — панель не мешает
   const pointMenu = $derived(!!menu.open && !menu.open.anchor);
   const visible = $derived(
-    !b.readonly && views.length > 0 && only !== "comment" && b.tool === "select" && !ix.busy && !ix.renaming && !editingCode && !pointMenu,
+    !b.readonly && views.length > 0 && only !== "comment" && b.tool === "select" && !ix.busy && !ix.renaming && !editingCode && !pointMenu && !(docked && b.ui.inspect),
   );
 
   /* ------------------------------ положение ------------------------------ */
@@ -96,10 +101,6 @@
   let bh = $state(0);
   const GAP = 40;
 
-  /* на телефоне панель не летает за выделением, а стоит внизу над инструментами */
-  const narrow = new MediaQuery("max-width: 640px");
-  const coarse = new MediaQuery("pointer: coarse");
-  const docked = $derived(narrow.current);
 
   const pos = $derived.by(() => {
     if (!visible) return null;
@@ -111,7 +112,7 @@
     const w = bw || 300;
     const h = bh || 40;
     let x = (a.x + c.x) / 2 - w / 2;
-    x = Math.max(8, Math.min(cam.vw - w - 8, x));
+    x = Math.max(8, Math.min(cam.vw - w - 8 - b.inset.right, x));
     let y = a.y - GAP - h;
     let above = true;
     if (y < 62) {
@@ -214,30 +215,16 @@
     drop(e, nodeMenu(b, ix));
   }
 
-  /**
-   * Панели оформления и логики — сбоку от выделения, чтобы не закрывать сам объект
-   * (если сбоку тесно — под кнопкой; на телефоне — снизу листом).
-   */
-  const at = (e: MouseEvent) => {
-    const cam = b.camera;
-    const r = s.boundsOfIds(s.selection.ids);
-    if (r) {
-      const a = cam.toScreen(r.x, r.y);
-      const c = cam.toScreen(r.x + r.w, r.y);
-      const y = Math.max(64, Math.min(cam.vh - 300, c.y - 8));
-      if (c.x + 14 + 320 <= cam.vw - 8) return { x: c.x + 14, y };
-      if (a.x - 14 - 320 >= 8) return { x: a.x - 14 - 320, y };
-    }
-    const rr = anchorOf(e).getBoundingClientRect();
-    return { x: rr.left, y: rr.bottom };
-  };
-  function openStyle(e: MouseEvent) {
-    b.ui.logic = null;
-    b.ui.style = b.ui.style ? null : at(e);
+  /** Панель настроек справа (на телефоне — лист снизу): вкладка и, для логики, стрелка. */
+  const insp = $derived(b.ui.inspect);
+  function openStyle() {
+    b.inspect("style", { toggle: true });
   }
-  function openLogic(e: MouseEvent, id: string) {
-    b.ui.style = null;
-    b.ui.logic = b.ui.logic?.id === id ? null : { ...at(e), id };
+  function openProps() {
+    b.inspect("props", { toggle: true });
+  }
+  function openLogic(id: string) {
+    b.inspect("logic", { arrow: id, toggle: true });
   }
 
   /* ------------------------------ виджеты ------------------------------ */
@@ -252,7 +239,7 @@
     if (it?.items) drop(e, [{ heading: label }, ...it.items]);
   }
   const fmt = (n: number) => String(n).replace(".", ",");
-  const diceLabel = $derived(one?.type === "dice" ? `d${one.props.sides ?? 6}` : "Грани");
+  const diceLabel = $derived(one?.type === "dice" ? (one.props.faces?.length ? "Свои" : `d${diceSides(one.props)}`) : "Грани");
 
   /* ------------------------------ задачи ------------------------------ */
 
@@ -485,7 +472,7 @@
         <button class="chip" onclick={(e) => sub(e, counterItems(b, views), "Шаг")} aria-label="Шаг" {@attach tip("Шаг", undefined, "top")}>
           <span class="lbl">±{one ? fmt(one.props.step ?? 1) : "…"}</span><ChevronDown size={13} />
         </button>
-        <button class="chip" disabled={views.every((v) => counterValue(v.props) === 0)} onclick={() => counterSet(b, ids, 0)} aria-label="Сбросить на 0" {@attach tip("Сбросить на 0", undefined, "top")}>
+        <button class="chip" disabled={views.every((v) => counterValue(v.props) === counterReset(v.props))} onclick={() => views.forEach((v) => counterSet(b, [v.id], counterReset(v.props)))} aria-label="Сбросить" {@attach tip("Сбросить", undefined, "top")}>
           <RotateCcw size={15} />
         </button>
         {#if one}
@@ -500,7 +487,7 @@
           <span class="lbl">{diceLabel}</span><ChevronDown size={13} />
         </button>
         <button class="chip" onclick={(e) => sub(e, diceItems(b, views), "Сколько кубиков")} aria-label="Сколько кубиков" {@attach tip("Сколько кубиков", undefined, "top")}>
-          <span class="lbl">×{one ? Math.max(1, Math.min(6, one.props.count ?? 1)) : "…"}</span><ChevronDown size={13} />
+          <span class="lbl">×{one ? diceCount(one.props) : "…"}</span><ChevronDown size={13} />
         </button>
       {/if}
       {#if only === "progress"}
@@ -529,21 +516,24 @@
             <span class="lbl">{primary.label}</span>
           </button>
         {/if}
-        <button class="chip" onclick={(e) => drop(e, widgetItems(b, views))} aria-label="Настроить" {@attach tip("Настроить", undefined, "top")}>
-          <Settings2 size={15} /><ChevronDown size={13} />
-        </button>
+        {#if widgetItems(b, views).length}
+          <button class="chip" onclick={(e) => drop(e, widgetItems(b, views))} aria-label="Быстрые настройки" {@attach tip("Быстрые настройки", undefined, "top")}>
+            <ChevronDown size={14} />
+          </button>
+        {/if}
         {#if one && TITLED_TYPES.has(one.type) && one.type !== "timer" && one.type !== "counter" && one.type !== "progress"}
           <button class="chip" onclick={() => (ix.renaming = one.id)} aria-label="Переименовать" {@attach tip("Переименовать", "Enter", "top")}><Pencil size={15} /></button>
         {/if}
       {/if}
 
       {#if logicOk && one}
-        <button class="chip" class:on={!!one.props.lg} onclick={(e) => openLogic(e, one.id)} aria-label="Логика" {@attach tip(one.props.lg ? "Логика стрелки" : "Добавить логику", undefined, "top")}>
+        <button class="chip" class:on={!!one.props.lg || insp?.tab === "logic"} onclick={() => openLogic(one.id)} aria-label="Логика" {@attach tip(one.props.lg ? "Логика стрелки" : "Добавить логику", undefined, "top")}>
           <Zap size={15} />{#if one.props.lg}<span class="lbl">{ruleSummary(s, one).replace("⚡", "").trim() || "вкл"}</span>{/if}
         </button>
       {/if}
 
-      <button class="chip" class:on={!!b.ui.style} onclick={openStyle} aria-label="Оформление" {@attach tip("Оформление", undefined, "top")}><Paintbrush size={15} /></button>
+      <button class="chip" class:on={insp?.tab === "props"} onclick={openProps} aria-label="Настройки" {@attach tip("Все настройки", "I", "top")}><Settings2 size={15} /></button>
+      <button class="chip" class:on={insp?.tab === "style"} onclick={openStyle} aria-label="Оформление" {@attach tip("Оформление", undefined, "top")}><Paintbrush size={15} /></button>
       {#if docked || coarse.current}
         <button
           class="chip"

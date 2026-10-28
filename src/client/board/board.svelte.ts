@@ -62,6 +62,8 @@ export interface Style {
 }
 
 export type Lod = "near" | "mid" | "far";
+/** Вкладки панели настроек: свойства объекта, оформление, логика. */
+export type InspectTab = "props" | "style" | "logic";
 export type Status = "connecting" | "online" | "offline";
 
 const KEY = Symbol("board");
@@ -132,9 +134,9 @@ export class Board {
 
   /** Открытые панели. */
   ui = $state({
-    /** Панель оформления / логики у кнопки панели свойств. */
-    style: null as { x: number; y: number } | null,
-    logic: null as { x: number; y: number; id: string } | null,
+    /** Панель настроек выделенного (справа; на телефоне — лист снизу).
+        arrow — какая стрелка открыта во вкладке «Логика». */
+    inspect: null as { tab: InspectTab; arrow?: string } | null,
     chat: false,
     palette: false,
     search: false,
@@ -144,6 +146,10 @@ export class Board {
     shortcuts: false,
     viewer: null as string | null,
   });
+
+  /** Сколько места у краёв экрана занимают пристёгнутые панели — чтобы
+      панель над выделением и камера не прятали объект под ними. */
+  inset = $state({ right: 0, bottom: 0 });
 
   /** Просмотр снимка из истории: доска только для чтения. */
   preview = $state<{ id: number; createdAt: number; store: BoardStore } | null>(null);
@@ -312,11 +318,29 @@ export class Board {
     this.peers = out;
   }
 
+  /** Ведущая вкладка — с наименьшим номером клиента среди всех на доске.
+      Она одна делает то, что должно случиться ровно один раз (перезапуск
+      таймера по кругу, сигнал по времени). */
+  get leader(): boolean {
+    const me = this.doc.clientID;
+    return this.peers.every((p) => p.clientId > me);
+  }
+
   /** Люди без повторов (одно лицо с двух вкладок). */
   get people(): Peer[] {
     const seen = new Map<string, Peer>();
     for (const p of this.peers) if (!seen.has(p.user.id)) seen.set(p.user.id, p);
     return [...seen.values()];
+  }
+
+  /** Открыть панель настроек на вкладке (повторно на той же — закрыть). */
+  inspect(tab: InspectTab = "props", opts: { arrow?: string; toggle?: boolean } = {}) {
+    const cur = this.ui.inspect;
+    if (opts.toggle && cur && cur.tab === tab && (!opts.arrow || cur.arrow === opts.arrow)) {
+      this.ui.inspect = null;
+      return;
+    }
+    this.ui.inspect = { tab, arrow: opts.arrow };
   }
 
   setTool(t: Tool, lock = false) {

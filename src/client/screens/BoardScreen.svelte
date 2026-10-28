@@ -13,6 +13,8 @@
   import "../styles/chrome.css";
   import "../styles/nodes.css";
   import "../styles/widgets.css";
+  import "../styles/play.css";
+  import "../styles/inspector.css";
   import "../styles/custom.css";
 
   let { id, focus, invite }: { id: string; focus?: string; invite?: string } = $props();

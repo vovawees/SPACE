@@ -14,7 +14,7 @@ import { rollDice } from "./nodes/games.ts";
 import { duplicate, removeSelected, tidy, withChildren, wrapInFrame, zoomToFit, zoomToSelection } from "./ops.ts";
 import type { Side } from "./connector.ts";
 import { CONNECTABLE } from "./interact.svelte.ts";
-import { TEXT_TYPES, TITLED_TYPES, WIDGET_EDIT_TYPES, type ShapeKind } from "./model.ts";
+import { INSPECT_TYPES, TEXT_TYPES, TITLED_TYPES, WIDGET_EDIT_TYPES, type ShapeKind } from "./model.ts";
 
 const TOOL_KEYS: Record<string, Tool> = {
   KeyV: "select",
@@ -223,6 +223,7 @@ export function attachKeys(b: Board): () => void {
         else if (v.type === "image") b.ui.viewer = v.id;
         else if (v.type === "link" || v.type === "video") ix.activate(v.id);
         else if (v.type === "sticker" && !b.readonly) stickerMenu(b, [v.id], b.camera.toScreen(v.x + v.w / 2, v.y + v.h));
+        else if (INSPECT_TYPES.has(v.type) && !b.readonly) b.inspect("props");
         return;
       }
       case "ArrowUp":
@@ -246,6 +247,10 @@ export function attachKeys(b: Board): () => void {
       }
       case "KeyG":
         if (!b.readonly && sel.size > 1) tidy(b, sel.list);
+        return;
+      // все настройки выделенного — панель сбоку
+      case "KeyI":
+        if (!e.repeat && !b.readonly && (sel.size || b.ui.inspect)) b.inspect("props", { toggle: true });
         return;
       case "KeyB":
         if (!b.readonly && !e.repeat) session.settings.library = !session.settings.library;

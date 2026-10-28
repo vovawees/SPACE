@@ -20,6 +20,7 @@ import Dices from "@lucide/svelte/icons/dices";
 import Gauge from "@lucide/svelte/icons/gauge";
 import Hash from "@lucide/svelte/icons/hash";
 import Pencil from "@lucide/svelte/icons/pencil";
+import SlidersHorizontal from "@lucide/svelte/icons/sliders-horizontal";
 import { api } from "../../lib/api.ts";
 import { toasts } from "../../lib/toast.svelte.ts";
 import { copyText, download } from "../../lib/util.ts";
@@ -32,8 +33,8 @@ import type { NodeView } from "../store.svelte.ts";
 import { clearVotes, votesOf } from "./poll.ts";
 import { cellOf, colsOf, insertCol, insertRow, removeCol, removeRow, rowsOf, tableCursor, tableText } from "./table.svelte.ts";
 import { isoDay } from "./task.ts";
-import { COUNTER_STEPS, DICE_SIDES, counterSet, counterValue, rollDice } from "./games.ts";
-import { clock, timerLeft, timerPatch } from "./timer.ts";
+import { COUNTER_STEPS, DICE_MAX, DICE_SIDES, counterReset, counterSet, counterValue, diceCount, diceSides, rollDice } from "./games.ts";
+import { clock, DAY, durText, HOUR, MIN, TIMER_PRESETS_MS, timerDur, timerLeft, timerPatch } from "./timer.ts";
 
 const dot = (css: string) => `<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5" fill="${css}"/></svg>`;
 
@@ -229,16 +230,22 @@ export async function resetVotes(b: Board, v: NodeView) {
 
 /* ------------------------------ таймер ------------------------------ */
 
-export const TIMER_PRESETS = [1, 3, 5, 10, 15, 25, 45, 60];
-
-export function timerItems(b: Board, views: NodeView[]): MenuEntry[] {
-  const cur = views.length === 1 ? (views[0]!.props.dur ?? 300_000) : 0;
-  const set = (min: number) =>
-    b.view.updateMany(views.filter((v) => v.type === "timer").map((v) => [v.id, timerPatch(v.props, "set", Date.now(), min * 60_000) as Partial<NodeData>]));
-  return [{ heading: "Длительность" }, ...TIMER_PRESETS.map((m) => ({ label: `${m} мин`, icon: m === 5 ? Timer : undefined, checked: cur === m * 60_000, run: () => set(m) }))];
+export function timerItems(b: Board, views: NodeView[], more?: () => void): MenuEntry[] {
+  const cur = views.length === 1 ? timerDur(views[0]!.props) : 0;
+  const set = (ms: number) =>
+    b.view.updateMany(views.filter((v) => v.type === "timer").map((v) => [v.id, timerPatch(v.props, "set", Date.now(), ms) as Partial<NodeData>]));
+  const presets = TIMER_PRESETS_MS.filter((ms) => ms <= HOUR || ms === DAY);
+  const out: MenuEntry[] = [{ heading: "Длительность" }, ...presets.map((ms) => ({ label: durText(ms), icon: ms === 5 * MIN ? Timer : undefined, checked: cur === ms, run: () => set(ms) }))];
+  if (cur && !presets.includes(cur)) out.splice(1, 0, { label: durText(cur), checked: true, run: () => {} });
+  if (more) out.push("-", { label: "Своё время…", icon: SlidersHorizontal, run: more });
+  return out;
 }
 
-export const timerShort = (v: NodeView) => clock(Math.max(1000, v.props.dur ?? 300_000)).replace(/^0(\d):00$/, "$1 мин").replace(/^(\d\d):00$/, "$1 мин");
+/** Коротко о длительности — для кнопки на панели: «5 мин», «3 д 2 ч». */
+export const timerShort = (v: NodeView) => {
+  const t = durText(timerDur(v.props));
+  return t.split(" ").length > 4 ? clock(timerDur(v.props)) : t;
+};
 export const timerRunning = (v: NodeView) => typeof v.props.end === "number" && timerLeft(v.props) > 0;
 
 /* ------------------------------ прочее ------------------------------ */
@@ -266,7 +273,7 @@ export function counterItems(b: Board, views: NodeView[], rename?: () => void): 
         run: () => b.view.updateMany(cs.map((v) => [v.id, { step: n === 1 ? undefined : n }])),
       })),
     },
-    { label: "Сбросить на 0", icon: RotateCcw, disabled: cs.every((v) => counterValue(v.props) === 0), run: () => counterSet(b, cs.map((v) => v.id), 0) },
+    { label: "Сбросить", icon: RotateCcw, disabled: cs.every((v) => counterValue(v.props) === counterReset(v.props)), run: () => cs.forEach((v) => counterSet(b, [v.id], counterReset(v.props))) },
   ];
   if (rename && cs.length === 1) out.push({ label: "Переименовать", icon: Pencil, keys: "Enter", run: rename });
   return out;
@@ -274,16 +281,18 @@ export function counterItems(b: Board, views: NodeView[], rename?: () => void): 
 
 /* ------------------------------- кубики ------------------------------- */
 
-export function diceItems(b: Board, views: NodeView[]): MenuEntry[] {
+export function diceItems(b: Board, views: NodeView[], more?: () => void): MenuEntry[] {
   const ds = views.filter((v) => v.type === "dice");
   if (!ds.length || b.readonly) return [];
   const one = ds.length === 1 ? ds[0]!.props : null;
   const set = (patch: Partial<NodeData>) => b.view.updateMany(ds.map((v) => [v.id, { ...patch, roll: null }]));
-  return [
+  const out: MenuEntry[] = [
     { label: "Бросить", icon: Dices, keys: "Enter", run: () => rollDice(b, ds.map((v) => v.id)) },
-    { label: "Граней", items: DICE_SIDES.map((n) => ({ label: `d${n}`, checked: one?.sides === n || (!one?.sides && n === 6 && !!one), run: () => set({ sides: n }) })) },
-    { label: "Сколько кубиков", items: [1, 2, 3, 4, 5, 6].map((n) => ({ label: String(n), checked: (one?.count ?? 1) === n && !!one, run: () => set({ count: n }) })) },
+    { label: "Граней", items: DICE_SIDES.map((n) => ({ label: `d${n}`, checked: !!one && !one.faces && diceSides(one) === n, run: () => set({ sides: n, faces: undefined }) })) },
+    { label: "Сколько кубиков", items: Array.from({ length: DICE_MAX }, (_, i) => i + 1).map((n) => ({ label: String(n), checked: !!one && diceCount(one) === n, run: () => set({ count: n }) })) },
   ];
+  if (more) out.push("-", { label: "Все настройки…", icon: SlidersHorizontal, run: more });
+  return out;
 }
 
 /* ------------------------------ прогресс ------------------------------ */

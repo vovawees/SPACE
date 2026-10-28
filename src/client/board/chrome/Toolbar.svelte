@@ -15,6 +15,7 @@
   import MousePointer2 from "@lucide/svelte/icons/mouse-pointer-2";
   import MoveUpRight from "@lucide/svelte/icons/move-up-right";
   import Pencil from "@lucide/svelte/icons/pencil";
+  import Plus from "@lucide/svelte/icons/plus";
   import SquareCode from "@lucide/svelte/icons/square-code";
   import Square from "@lucide/svelte/icons/square";
   import StickyNote from "@lucide/svelte/icons/sticky-note";
@@ -48,6 +49,7 @@
     type TextSize,
   } from "../model.ts";
   import { shapeGlyph } from "../shapes.ts";
+  import { bottom, dockCenter, dockSqueezed, measure } from "./bottom.svelte.ts";
 
   type Icon = Component<Record<string, unknown>>;
   interface ToolDef {
@@ -60,6 +62,7 @@
 
   const b = useBoard();
   const compact = new MediaQuery("max-width: 640px");
+  const dockLeft = $derived(dockCenter(b.inset.right));
 
 
   const T: Record<string, ToolDef> = {
@@ -182,7 +185,7 @@
   const weightPx = (s: StrokeSize) => Math.max(2, Math.min(9, STROKE_PX[s] * (b.tool === "draw" || b.tool === "pen" ? 1.15 : 1)));
 </script>
 
-<div class="dock" class:chat-open={b.ui.chat || !!b.ui.style || !!b.ui.logic}>
+<div class="dock" class:chat-open={b.ui.chat || !!b.ui.inspect} class:squeezed={dockSqueezed(b.inset.right)} style:left={dockLeft == null ? null : `${dockLeft}px`}>
   {#if showStyle}
     <div class="style panel" role="toolbar" aria-label="Стиль">
       <div class="colors">
@@ -274,7 +277,7 @@
     </div>
   {/if}
 
-  <div class="tools panel" role="toolbar" aria-label="Инструменты">
+  <div class="tools panel" role="toolbar" aria-label="Инструменты" {@attach measure((w) => (bottom.dockW = w))}>
     {#if b.readonly}
       {#each readonlyTools as t (t.id)}
         {@render toolBtn(t)}
@@ -283,6 +286,7 @@
       {#each short as t (t.id)}
         {@render toolBtn(t)}
       {/each}
+      {@render addBtn()}
       <button class="tool" class:on={!!extraActive} aria-label="Ещё инструменты" onclick={moreMenu}>
         {#if extraActive}
           <extraActive.icon size={19} />
@@ -301,9 +305,23 @@
       <button class="tool" aria-label="Загрузить файлы" onclick={() => void upload()} {@attach tip("Загрузить файлы", undefined, "top")}>
         <ImagePlus size={19} />
       </button>
+      {@render addBtn()}
     {/if}
   </div>
 </div>
+
+{#snippet addBtn()}
+  <button
+    class="tool add"
+    class:on={session.settings.library}
+    aria-label="Добавить объект"
+    aria-pressed={session.settings.library}
+    onclick={() => (session.settings.library = !session.settings.library)}
+    {@attach tip("Добавить: виджеты, игры, шаблоны…", "B", "top")}
+  >
+    <Plus size={20} strokeWidth={2.4} />
+  </button>
+{/snippet}
 
 {#snippet toolBtn(t: ToolDef)}
   {@const Icon = t.icon}
@@ -339,7 +357,7 @@
 <style>
   .dock {
     position: fixed;
-    left: 50%;
+    left: calc((100% - var(--insp, 0px)) / 2);
     bottom: calc(12px + env(safe-area-inset-bottom, 0px));
     transform: translateX(-50%);
     display: flex;
@@ -350,7 +368,8 @@
     max-width: calc(100vw - 16px);
     transition:
       opacity 160ms var(--ease-out),
-      translate 160ms var(--ease-out);
+      translate 160ms var(--ease-out),
+      left 160ms var(--ease-out);
   }
   .tools {
     display: flex;
@@ -430,6 +449,11 @@
     display: grid;
     place-items: center;
   }
+  .dock.squeezed {
+    opacity: 0;
+    pointer-events: none;
+    translate: 0 16px;
+  }
   /* на телефоне чат и панели — листом снизу; панель инструментов уходит */
   @media (max-width: 760px) {
     .dock.chat-open {
@@ -445,5 +469,24 @@
     .chip-label {
       display: none;
     }
+  }
+  .tool.add {
+    margin-left: 2px;
+    color: var(--accent-ink);
+    background: var(--accent);
+  }
+  .tool.add:hover:not(:disabled) {
+    color: var(--accent-ink);
+    background: var(--accent-2);
+  }
+  .tool.add.on {
+    color: var(--accent);
+    background: var(--accent-soft);
+  }
+  .tool.add :global(svg) {
+    transition: rotate 180ms var(--ease-out);
+  }
+  .tool.add.on :global(svg) {
+    rotate: 45deg;
   }
 </style>

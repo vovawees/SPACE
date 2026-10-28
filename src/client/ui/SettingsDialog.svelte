@@ -79,7 +79,7 @@
     ["lines", "Линии"],
     ["cross", "Крестики"],
   ];
-  type Flag = "grid" | "glow" | "snap" | "smartDraw" | "minimap" | "cursorNames" | "peerSelection" | "reduceMotion";
+  type Flag = "grid" | "glow" | "snap" | "smartDraw" | "minimap" | "cursorNames" | "peerSelection" | "reduceMotion" | "sound";
   const flags: [Flag, string, string][] = [
     ["glow", "Свечение под группами", "Мягкий цветной ореол под скоплениями карточек"],
     ["snap", "Прилипание", "Направляющие и выравнивание при перетаскивании"],
@@ -88,6 +88,7 @@
     ["cursorNames", "Имена у курсоров", "Подписи рядом с курсорами участников"],
     ["peerSelection", "Чужие выделения", "Рамка с именем вокруг того, что выбрал участник"],
     ["reduceMotion", "Меньше анимации", "Без плавных перелётов камеры и всплывающих эффектов"],
+    ["sound", "Звуки", "Таймеры, кубики, монетка, колода, «Кто первый» и другие игры"],
   ];
   const wheels: [WheelMode, string][] = [
     ["auto", "Авто"],

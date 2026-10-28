@@ -473,6 +473,13 @@ div.big-btn .rename {
   font-weight: 600;
   color: var(--ink-3);
 }
+.clk-ampm {
+  margin-left: 0.22em;
+  font-size: 0.34em;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+}
 .clk-date {
   font-size: calc(12.5px * var(--k));
   color: var(--ink-3);

@@ -24,7 +24,7 @@
   let { v, editing }: NodeCompProps = $props();
   const b = useBoard();
   const lang = $derived(v.props.lang || "text");
-  const wrap = $derived(!!v.props.wrap);
+  const wrap = $derived(v.props.wrap !== false);
   const canPreview = $derived(PREVIEW_LANGS.has(lang));
   const preview = $derived(!editing && canPreview && v.props.view === "preview");
   const src = $derived(preview ? v.textValue : "");

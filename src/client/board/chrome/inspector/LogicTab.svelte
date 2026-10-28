@@ -1,26 +1,23 @@
 <script lang="ts">
   /* Логика стрелки: «когда у источника случилось … — с целью сделать …».
      Правка применяется сразу; новое правило сначала показывается
-     предложением и включается кнопкой. На телефоне — листом снизу. */
-  import { computePosition, flip, offset, shift, size } from "@floating-ui/dom";
+     предложением и включается кнопкой. */
   import ArrowRight from "@lucide/svelte/icons/arrow-right";
   import Trash from "@lucide/svelte/icons/trash";
-  import X from "@lucide/svelte/icons/x";
   import Zap from "@lucide/svelte/icons/zap";
   import { untrack } from "svelte";
-  import { MediaQuery } from "svelte/reactivity";
-  import { picker } from "../../ui/colorpick.svelte.ts";
-  import { useBoard } from "../board.svelte.ts";
-  import { AUTO_INPUT, actDef, actionsFor, logicEnds, suggestRule, trigDef, triggersFor } from "../logic.svelte.ts";
-  import { COLOR_ITEMS, TYPE_LABELS, type LogicRule, type NodeType } from "../model.ts";
-  import { nodeTitle, statusesOf } from "../nodes/values.ts";
-  import { FX_KINDS, wheelOptions } from "../nodes/widgets.ts";
+  import { useBoard } from "../../board.svelte.ts";
+  import { AUTO_INPUT, actDef, actionsFor, logicEnds, suggestRule, trigDef, triggersFor } from "../../logic.svelte.ts";
+  import { COLOR_ITEMS, TYPE_LABELS, type LogicRule, type NodeType } from "../../model.ts";
+  import { nodeTitle, statusesOf } from "../../nodes/values.ts";
+  import { playersOf } from "../../nodes/play.ts";
+  import { FX_KINDS, wheelOptions } from "../../nodes/widgets.ts";
 
+  let { arrowId, onclose }: { arrowId: string; onclose: () => void } = $props();
   const b = useBoard();
   const s = $derived(b.view);
-  const sheet = new MediaQuery("(max-width: 640px)");
 
-  const arrow = $derived(b.ui.logic ? s.get(b.ui.logic.id) : undefined);
+  const arrow = $derived(s.get(arrowId));
   const ends = $derived(arrow ? logicEnds(s, arrow) : null);
   const trs = $derived(ends ? triggersFor(ends.src.type) : []);
   const acts = $derived(ends ? actionsFor(ends.tgt.type) : []);
@@ -34,17 +31,12 @@
   });
   const rule = $derived(saved ?? draft);
 
-  // стрелку удалили или отвязали — закрыть
-  $effect(() => {
-    if (b.ui.logic && (!arrow || b.readonly)) untrack(() => (b.ui.logic = null));
-  });
-
   const trig = $derived(rule && ends ? trigDef(ends.src.type, rule.on) : undefined);
   const act = $derived(rule && ends ? actDef(ends.tgt.type, rule.do) : undefined);
   /** Итог считается сам — событие не нужно. */
   const derivedAct = $derived(!!rule && (rule.do === "share" || rule.do === "count" || rule.do === "all"));
   const mirror = $derived(rule?.do === "mirror");
-  const GOAL_TYPES = new Set<NodeType>(["counter", "dice", "calc", "poll", "button", "note", "text", "shape"]);
+  const GOAL_TYPES = new Set<NodeType>(["counter", "dice", "calc", "poll", "button", "note", "text", "shape", "score", "buzzer", "input", "calendar", "words", "random", "coin"]);
   const needGoal = $derived(derivedAct && !!ends && GOAL_TYPES.has(ends.src.type));
   const invTrig = $derived(trig?.inv && ends ? trigDef(ends.src.type, trig.inv) : undefined);
   const canRev = $derived(!!invTrig && !!act?.inv && !derivedAct && !mirror);
@@ -89,6 +81,7 @@
     if (d?.x === "color") p.x = "green";
     if (d?.x === "fx") p.x = "confetti";
     if (d?.x === "state") p.x = String(Math.max(0, statusesOf(ends.tgt.props).length - 1));
+    if (d?.x === "player") p.x = rule?.x && playersOf(ends.tgt.props).some((x) => x.id === rule?.x) ? rule.x : playersOf(ends.tgt.props)[0]?.id;
     if (id === "share" || id === "count" || id === "all") p.n = needGoalFor(ends.src.type) ? 10 : undefined;
     // эффекты и сообщения не «отматываются»
     if (d?.x === "fx" || d?.x === "text" || id === "go") p.rev = false;
@@ -107,70 +100,14 @@
   }
   function remove() {
     if (arrow) s.update(arrow.id, { lg: undefined });
-    b.ui.logic = null;
-  }
-
-  /* ------------------------------ место ------------------------------ */
-
-  const PAD = { top: 64, bottom: 76, left: 8, right: 8 };
-  let panel = $state<HTMLDivElement>();
-  $effect(() => {
-    const at = b.ui.logic;
-    const el = panel;
-    if (!at || !el) return;
-    if (sheet.current) {
-      el.style.left = "";
-      el.style.top = "";
-      el.style.maxHeight = "";
-      el.dataset.shown = "";
-      // лист закрывает низ экрана — подвинуть доску, чтобы объект остался виден над ним
-      const raf = requestAnimationFrame(() => {
-        const r = untrack(() => s.boundsOfIds([at.id]));
-        if (r) b.camera.revealBand(r, 64, b.camera.vh - el.getBoundingClientRect().top + 8);
-      });
-      return () => cancelAnimationFrame(raf);
-    }
-    const anchor = { getBoundingClientRect: () => ({ x: at.x, y: at.y, left: at.x, top: at.y, right: at.x, bottom: at.y, width: 0, height: 0 }) };
-    void computePosition(anchor, el, { placement: "bottom-start", strategy: "fixed", middleware: [
-        offset(8),
-        flip({ padding: PAD }),
-        // Не выше свободного места: длинная панель прокручивается и не заезжает под нижнюю панель инструментов.
-        size({ padding: PAD, apply: ({ availableHeight, elements }) => void (elements.floating.style.maxHeight = `${Math.round(Math.max(260, Math.min(640, availableHeight)))}px`) }),
-        shift({ padding: PAD, crossAxis: true }),
-      ] }).then(({ x, y }) => {
-      el.style.left = `${Math.round(x)}px`;
-      el.style.top = `${Math.round(y)}px`;
-      el.dataset.shown = "";
-    });
-  });
-
-  function key(e: KeyboardEvent) {
-    if (e.key !== "Escape" || picker.open || !b.ui.logic) return;
-    e.preventDefault();
-    e.stopPropagation();
-    b.ui.logic = null;
   }
 
   const stop = (e: KeyboardEvent) => e.stopPropagation();
 </script>
 
-<svelte:window onkeydowncapture={key} />
 
-{#if b.ui.logic && arrow}
-  <div
-    class="lp panel"
-    class:sheet={sheet.current}
-    bind:this={panel}
-    role="dialog"
-    aria-label="Логика стрелки"
-    tabindex="-1"
-    onpointerdown={(e) => e.stopPropagation()}
-    onwheel={(e) => e.stopPropagation()}
-  >
-    <header class="lp-head">
-      <span class="lp-title"><Zap size={14} /> Логика</span>
-      <button type="button" class="chip" aria-label="Закрыть" onclick={() => (b.ui.logic = null)}><X size={15} /></button>
-    </header>
+{#if arrow}
+  <div class="lp">
 
     {#if !ends}
       <p class="lp-hint">Привяжите оба конца стрелки к объектам — тогда стрелка сможет передавать события.</p>
@@ -262,8 +199,17 @@
           {/if}
           {#if act?.x === "text"}
             <label class="field">
-              <span class="label">Сообщение</span>
-              <input class="input sm" maxlength="200" placeholder="Например: «Готово! 🎉»" value={rule.x ?? ""} onchange={(e) => put({ x: e.currentTarget.value })} onkeydown={stop} />
+              <span class="label">{act.id === "say" ? "Сообщение" : "Текст"}</span>
+              <input class="input sm" maxlength="200" placeholder={act.id === "say" ? "Например: «Готово! 🎉»" : "Что вписать"} value={rule.x ?? ""} onchange={(e) => put({ x: e.currentTarget.value })} onkeydown={stop} />
+            </label>
+          {/if}
+          {#if act?.x === "player"}
+            {@const pl = playersOf(ends.tgt.props)}
+            <label class="field">
+              <span class="label">Кому</span>
+              <select class="input sm" value={pl.some((x) => x.id === rule.x) ? rule.x : (pl[0]?.id ?? "")} onchange={(e) => put({ x: e.currentTarget.value })}>
+                {#each pl as x (x.id)}<option value={x.id}>{x.t || "Без имени"}</option>{/each}
+              </select>
             </label>
           {/if}
           {#if act?.x === "state"}
@@ -287,10 +233,10 @@
           {#if saved}
             <button type="button" class="btn ghost sm danger-text" onclick={remove}><Trash size={14} /> Убрать правило</button>
             <span class="lp-sp"></span>
-            <button type="button" class="btn primary sm" onclick={() => (b.ui.logic = null)}>Готово</button>
+            <button type="button" class="btn primary sm" onclick={onclose}>Готово</button>
           {:else}
             <span class="lp-sp"></span>
-            <button type="button" class="btn ghost sm" onclick={() => (b.ui.logic = null)}>Отмена</button>
+            <button type="button" class="btn ghost sm" onclick={onclose}>Отмена</button>
             <button type="button" class="btn primary sm" onclick={enable}><Zap size={14} /> Включить</button>
           {/if}
         </footer>
@@ -301,50 +247,7 @@
 
 <style>
   .lp {
-    position: fixed;
-    left: 0;
-    top: 0;
-    width: 320px;
-    max-height: min(calc(100dvh - 150px), 620px);
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    visibility: hidden;
-    z-index: 2;
-    padding-bottom: 4px;
-  }
-  .lp:global([data-shown]) {
-    visibility: visible;
-    animation: lp-in 150ms var(--ease-out);
-  }
-  @keyframes lp-in {
-    from {
-      opacity: 0;
-      translate: 0 4px;
-    }
-  }
-  .lp.sheet {
-    left: 8px !important;
-    right: 8px;
-    top: auto !important;
-    bottom: calc(8px + env(safe-area-inset-bottom, 0px));
-    width: auto;
-    max-height: 66dvh;
-  }
-  .lp-head {
-    display: flex;
-    align-items: center;
-    padding: 8px 8px 4px 14px;
-  }
-  .lp-title {
-    flex: 1;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 12px;
-    font-weight: 640;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: var(--c-yellow);
+    padding-top: 10px;
   }
   .lp-ends {
     display: grid;

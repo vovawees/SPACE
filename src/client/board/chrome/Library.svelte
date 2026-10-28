@@ -4,6 +4,7 @@
      перетаскивание — туда, где его отпустили. Клавиша B — открыть/скрыть. */
   import ArrowRight from "@lucide/svelte/icons/arrow-right";
   import Boxes from "@lucide/svelte/icons/boxes";
+  import Gamepad2 from "@lucide/svelte/icons/gamepad-2";
   import LayoutTemplate from "@lucide/svelte/icons/layout-template";
   import PanelLeftClose from "@lucide/svelte/icons/panel-left-close";
   import Plug from "@lucide/svelte/icons/plug";
@@ -26,7 +27,7 @@
   import { pickFiles } from "../menus.ts";
 
   type Icon = Component<Record<string, unknown>>;
-  const ICONS: Record<LibCat, Icon> = { basic: Boxes, widgets: Zap, shapes: Shapes, stickers: SmilePlus, templates: LayoutTemplate, services: Plug };
+  const ICONS: Record<LibCat, Icon> = { basic: Boxes, widgets: Zap, games: Gamepad2, shapes: Shapes, stickers: SmilePlus, templates: LayoutTemplate, services: Plug };
 
   const b = useBoard();
   const st = session.settings;
@@ -142,7 +143,7 @@
     </button>
   {:else}
     {@const I = it.icon}
-    <button class="lib-tile" draggable={!it.ask} ondragstart={(e) => dragStart(e, it)} onclick={() => use(it)}>
+    <button class="lib-tile" draggable={!it.ask} ondragstart={(e) => dragStart(e, it)} onclick={() => use(it)} aria-label={it.label} {@attach it.desc ? tip(it.desc, undefined, "top") : undefined}>
       {#if I}<I size={22} strokeWidth={1.7} />{/if}
       <span>{it.label}</span>
     </button>
@@ -180,6 +181,16 @@
         {#if compact.current}<X size={16} />{:else}<PanelLeftClose size={16} />{/if}
       </button>
     </header>
+    {#if compact.current}
+      <div class="lib-tabs" role="tablist" aria-label="Разделы">
+        {#each LIB_CATS as c (c.id)}
+          {@const I = ICONS[c.id]}
+          <button class="lib-tab" class:on={cat === c.id && !q.trim()} role="tab" aria-selected={cat === c.id} onclick={() => ((st.libCat = c.id), (q = ""), (asking = null))}>
+            <I size={14} strokeWidth={2} />{c.label}
+          </button>
+        {/each}
+      </div>
+    {/if}
     <label class="lib-search">
       <Search size={15} />
       <input bind:this={searchInput} bind:value={q} placeholder="Искать…" aria-label="Поиск в библиотеке" />
@@ -304,7 +315,8 @@
     gap: 6px;
   }
   .lib-grid.basic,
-  .lib-grid.widgets {
+  .lib-grid.widgets,
+  .lib-grid.games {
     grid-template-columns: repeat(3, 1fr);
   }
   .lib-grid.shapes {
@@ -508,5 +520,32 @@
   :global([data-reduce-motion]) .lib-shape,
   :global([data-reduce-motion]) .lib-tpl {
     animation: none;
+  }
+  .lib-tabs {
+    display: flex;
+    gap: 4px;
+    padding: 2px 10px 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .lib-tabs::-webkit-scrollbar {
+    display: none;
+  }
+  .lib-tab {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 30px;
+    padding: 0 11px;
+    border-radius: 99px;
+    font-size: 12.5px;
+    font-weight: 560;
+    color: var(--ink-2);
+    background: var(--surface-2);
+  }
+  .lib-tab.on {
+    color: var(--accent);
+    background: var(--accent-soft);
   }
 </style>

@@ -16,7 +16,8 @@ import { BARBED, DEFAULT_BARBS, SIDE_N, fractionAt, magnetsOf, nearestOnOutline,
 import { boundsOf, center, containsPt, dist, expand, fromPoints, intersects, rotate, simplify, snapAngle, type Pt, type Rect } from "./geometry.ts";
 import { eraseHits, frameLabelHit, hitTest, insideNode, nodesInRect } from "./hit.ts";
 import { canvasMenu, linkEndMenu, nodeMenu, stickerMenu } from "./menus.ts";
-import { ASPECT_TYPES, TEXT_TYPES, TITLED_TYPES, WIDGET_EDIT_TYPES, WIDGET_TYPES, defaults, type Binding, type Color, type ColorName, type Head, type NodeData, type NodeProps, type NodeType, type ShapeKind, type StrokeSize } from "./model.ts";
+import { TAP_EVENT } from "./nodes/tap.ts";
+import { ASPECT_TYPES, INSPECT_TYPES, TEXT_TYPES, TITLED_TYPES, WIDGET_EDIT_TYPES, WIDGET_TYPES, defaults, type Binding, type Color, type ColorName, type Head, type NodeData, type NodeProps, type NodeType, type ShapeKind, type StrokeSize } from "./model.ts";
 import { duplicate, place, withChildren } from "./ops.ts";
 import { recognize } from "./recognize.ts";
 import { inkPx } from "./shapes.ts";
@@ -538,20 +539,21 @@ export class Interact {
 
   private selectRoute(t: Element, p: Ptr, readonly: boolean): Gesture | null {
     const v = this.nodeAtEvent(t, p.w);
-    if (v) return this.pressNode(v, p, readonly);
+    if (v) return this.pressNode(v, p, readonly, t);
     if (p.type === "touch") return this.panGesture(p, true);
     return this.marqueeGesture(p);
   }
 
   /* ============================== двойной щелчок ============================== */
 
-  private tap(q: Ptr, id: string | null) {
+  private tap(q: Ptr, id: string | null, acted = false) {
     const now = performance.now();
     const l = this.lastTap;
     const near = Math.hypot(q.cx - l.x, q.cy - l.y) < (q.type === "touch" ? 26 : 8);
     const dbl = now - l.t < 420 && near && l.id === id;
     this.lastTap = dbl ? { t: 0, x: 0, y: 0, id: null } : { t: now, x: q.cx, y: q.cy, id };
-    if (dbl) this.onDouble(id, q);
+    // щелчки по «живой» части (карточка, сюрприз) — каждый сам по себе
+    if (dbl && !acted) this.onDouble(id, q);
   }
 
   private onDouble(id: string | null, q: Ptr) {
@@ -585,6 +587,14 @@ export class Interact {
     }
     const v = s.get(id);
     if (!v) return;
+    // приборы и игры: двойной щелчок — все настройки сбоку
+    if (INSPECT_TYPES.has(v.type) && v.type !== "sticker") {
+      if (!b.readonly) {
+        if (!s.selection.has(id)) s.selection.set([id]);
+        b.inspect("props");
+      }
+      return;
+    }
     if (TITLED_TYPES.has(v.type)) {
       if (!b.readonly && !v.locked) this.renaming = id;
       return;
@@ -675,7 +685,7 @@ export class Interact {
 
   /* ============================== выделение и перенос ============================== */
 
-  private pressNode(v: NodeView, p: Ptr, readonly: boolean): Gesture {
+  private pressNode(v: NodeView, p: Ptr, readonly: boolean, target?: Element): Gesture {
     const s = this.b.view;
     const sel = s.selection;
     const was = sel.has(v.id);
@@ -703,7 +713,10 @@ export class Interact {
         if (drag) return drag.up(q);
         if (toggle && was) sel.remove([v.id]);
         else if (!toggle && was && sel.size > 1) sel.set([v.id]);
-        this.tap(q, v.id);
+        // щелчок без сдвига по [data-tap] — действие объекта (перевернуть карточку…)
+        const live = !toggle ? target?.closest?.<HTMLElement>("[data-tap]") : null;
+        if (live) live.dispatchEvent(new CustomEvent(TAP_EVENT));
+        this.tap(q, v.id, !!live);
       },
       cancel: () => drag?.cancel(),
     };

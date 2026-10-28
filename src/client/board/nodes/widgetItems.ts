@@ -19,6 +19,37 @@ import type { NodeView } from "../store.svelte.ts";
 import { candidates, loadMembers } from "./actions.ts";
 import { DEFAULT_STATUSES, statusesOf } from "./values.ts";
 import { TIMEZONES, clearRatings, markPatch, pressButton, setStatus, setSwitch, spinWheel, wheelOptions } from "./widgets.ts";
+import {
+  RANDOM_MODES,
+  buzzesOf,
+  checklistPatch,
+  clearDays,
+  clearWords,
+  deckDraw,
+  deckShuffle,
+  flipCard,
+  flipCoin,
+  genRandom,
+  nextTurn,
+  resetBuzz,
+  resetScores,
+  resetTurns,
+  revealAll,
+  swPatch,
+  swRunning,
+} from "./play.ts";
+import Coins from "@lucide/svelte/icons/coins";
+import Dices from "@lucide/svelte/icons/dices";
+import Flag from "@lucide/svelte/icons/flag";
+import Pause from "@lucide/svelte/icons/pause";
+import Rotate3d from "@lucide/svelte/icons/rotate-3d";
+import Shuffle from "@lucide/svelte/icons/shuffle";
+import SkipBack from "@lucide/svelte/icons/skip-back";
+import SkipForward from "@lucide/svelte/icons/skip-forward";
+import Spade from "@lucide/svelte/icons/spade";
+import Eye from "@lucide/svelte/icons/eye";
+import EyeOff from "@lucide/svelte/icons/eye-off";
+import Eraser from "@lucide/svelte/icons/eraser";
 
 type Entry = MenuEntry;
 const dot = (css: string) => `<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5" fill="${css}"/></svg>`;
@@ -46,6 +77,27 @@ export function primaryAction(b: Board, views: NodeView[]): { label: string; run
       return { label: "Крутить", run: () => spinWheel(b, ids) };
     case "status":
       return { label: "Следующий", run: () => setStatus(b, ids, "next") };
+    case "stopwatch": {
+      const run = views.some((v) => swRunning(v.props));
+      return { label: run ? "Стоп" : "Старт", run: () => b.view.updateMany(views.map((v) => [v.id, swPatch(v.props, run ? "stop" : "start") as Partial<NodeData>])) };
+    }
+    case "coin":
+      return { label: "Подбросить", run: () => flipCoin(b, ids) };
+    case "flipcard":
+      return views.some((v) => v.props.self) ? null : { label: "Перевернуть", run: () => flipCard(b, ids) };
+    case "deck":
+      return { label: "Тянуть карту", run: () => void (deckDraw(b, ids) || toasts.show("Колода пуста — перемешайте")) };
+    case "random":
+      return { label: "Выбрать", run: () => void genRandom(b, ids) };
+    case "turns":
+      return { label: "Следующий ход", run: () => nextTurn(b, ids, 1) };
+    case "buzzer":
+      return views.some((v) => buzzesOf(v.props).length) ? { label: "Сбросить", run: () => resetBuzz(b, ids) } : null;
+    case "spoiler": {
+      if (views.some((v) => v.props.sm === "self")) return null;
+      const on = views.every((v) => v.props.on);
+      return { label: on ? "Спрятать" : "Открыть", run: () => revealAll(b, ids, !on) };
+    }
   }
   return null;
 }
@@ -257,6 +309,126 @@ export function widgetItems(b: Board, views: NodeView[]): Entry[] {
         },
       });
       out.push(rename);
+      break;
+
+    case "stopwatch": {
+      const run = views.some((v) => swRunning(v.props));
+      const sw = (kind: "start" | "stop" | "reset" | "lap") => b.view.updateMany(views.map((v) => [v.id, swPatch(v.props, kind) as Partial<NodeData>]));
+      out.push({ label: run ? "Остановить" : "Запустить", icon: run ? Pause : Play, run: () => sw(run ? "stop" : "start") });
+      if (run) out.push({ label: "Отметить круг", icon: Flag, run: () => sw("lap") });
+      out.push({ label: "Сбросить", icon: RotateCcw, run: () => sw("reset") });
+      out.push({ label: "Показывать сотые", checked: !!one && !!p?.ms, run: () => set({ ms: !p?.ms || undefined }) });
+      out.push(rename);
+      break;
+    }
+
+    case "coin":
+      out.push({ label: "Подбросить", icon: Coins, run: () => flipCoin(b, ids) });
+      out.push({ label: "Сбросить счёт", icon: RotateCcw, run: () => set({ ch: undefined, coin: null }) });
+      out.push(rename);
+      break;
+
+    case "flipcard":
+      out.push({ label: "Перевернуть", icon: Rotate3d, disabled: views.some((v) => v.props.self), run: () => flipCard(b, ids) });
+      out.push({ label: "У каждого своя", checked: !!one && !!p?.self, run: () => set({ self: !p?.self || undefined, on: undefined }) });
+      break;
+
+    case "spoiler": {
+      const on = views.every((v) => v.props.on);
+      out.push({ label: on ? "Спрятать у всех" : "Открыть у всех", icon: on ? EyeOff : Eye, disabled: views.some((v) => v.props.sm === "self"), run: () => revealAll(b, ids, !on) });
+      out.push({ label: "У каждого своё", checked: !!one && p?.sm === "self", run: () => set({ sm: p?.sm === "self" ? undefined : "self", on: undefined }) });
+      out.push(rename);
+      break;
+    }
+
+    case "deck":
+      out.push({ label: "Тянуть карту", icon: Spade, run: () => void (deckDraw(b, ids) || toasts.show("Колода пуста — перемешайте")) });
+      out.push({ label: "Перемешать", icon: Shuffle, run: () => deckShuffle(b, ids) });
+      out.push({
+        label: "Колода",
+        items: ([["36", "36 карт"], ["52", "52 карты"], ["custom", "Свои карты"]] as const).map(([k, label]) => ({
+          label,
+          checked: !!one && (p?.dk ?? "36") === k,
+          run: () => {
+            set({ dk: k === "36" ? undefined : k, pile: undefined, top: null, out: undefined });
+            if (k === "custom") b.inspect("props");
+          },
+        })),
+      });
+      out.push(rename);
+      break;
+
+    case "random":
+      out.push({ label: "Выбрать", icon: Dices, run: () => void genRandom(b, ids) });
+      out.push({ label: "Режим", items: RANDOM_MODES.map(([k, label]) => ({ label, checked: !!one && (p?.rm ?? "num") === k, run: () => set({ rm: k === "num" ? undefined : k, used: undefined, rnd: null }) })) });
+      out.push({ label: "Без повторов", checked: !!one && !!p?.uniq, run: () => set({ uniq: !p?.uniq || undefined, used: undefined }) });
+      if (views.some((v) => v.props.used?.length)) out.push({ label: "Начать заново", icon: RotateCcw, run: () => set({ used: undefined, rnd: null }) });
+      out.push(rename);
+      break;
+
+    case "score":
+      out.push({
+        label: "Обнулить счёт",
+        icon: RotateCcw,
+        run: async () => {
+          if (await ask({ title: "Обнулить счёт?", text: "Очки всех игроков станут 0.", ok: "Обнулить", danger: true })) resetScores(b, ids);
+        },
+      });
+      out.push(rename);
+      break;
+
+    case "turns":
+      out.push({ label: "Следующий ход", icon: SkipForward, run: () => nextTurn(b, ids, 1) });
+      out.push({ label: "Ход назад", icon: SkipBack, run: () => nextTurn(b, ids, -1) });
+      out.push({ label: "Начать сначала", icon: RotateCcw, run: () => resetTurns(b, ids) });
+      out.push(rename);
+      break;
+
+    case "buzzer":
+      out.push({ label: "Сбросить нажатия", icon: RotateCcw, disabled: !views.some((v) => buzzesOf(v.props).length), run: () => resetBuzz(b, ids) });
+      out.push(rename);
+      break;
+
+    case "checklist":
+      out.push({ label: "Отметить все", icon: ListChecks, run: () => b.view.updateMany(views.map((v) => [v.id, checklistPatch(v, "all") as Partial<NodeData>])) });
+      out.push({ label: "Снять все отметки", icon: RotateCcw, run: () => b.view.updateMany(views.map((v) => [v.id, checklistPatch(v, "clear") as Partial<NodeData>])) });
+      out.push(rename);
+      break;
+
+    case "input":
+      out.push({ label: "Тип", items: ([["text", "Текст"], ["num", "Число"]] as const).map(([k, label]) => ({ label, checked: !!one && (p?.it ?? "text") === k, run: () => set({ it: k }) })) });
+      out.push({ label: "Очистить", icon: Eraser, run: () => set({ iv: undefined }) });
+      out.push(rename);
+      break;
+
+    case "calendar":
+      out.push({ label: "К текущему месяцу", run: () => set({ ym: undefined }) });
+      out.push({
+        label: "Убрать все отметки",
+        icon: RotateCcw,
+        run: async () => {
+          if (await ask({ title: "Убрать отметки?", text: "Отметки всех участников во всех месяцах пропадут.", ok: "Убрать", danger: true })) clearDays(b, ids);
+        },
+      });
+      out.push(rename);
+      break;
+
+    case "words":
+      out.push({
+        label: "Очистить облако",
+        icon: RotateCcw,
+        run: async () => {
+          if (await ask({ title: "Очистить облако?", text: "Слова всех участников пропадут.", ok: "Очистить", danger: true })) clearWords(b, ids);
+        },
+      });
+      out.push(rename);
+      break;
+
+    case "token":
+      out.push({
+        label: "Форма",
+        items: ([["pawn", "Пешка"], ["circle", "Круг"], ["square", "Квадрат"], ["hex", "Шестигранник"], ["star", "Звезда"]] as const).map(([k, label]) => ({ label, checked: !!one && (p?.tk ?? "pawn") === k, run: () => set({ tk: k }) })),
+      });
       break;
 
     case "gate":

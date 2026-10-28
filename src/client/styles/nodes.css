@@ -430,6 +430,57 @@
     transform: scale(0.97);
   }
 }
+.timer-time.long {
+  font-size: calc(27px * var(--k));
+  letter-spacing: -0.01em;
+}
+.timer-loop {
+  display: inline-flex;
+  vertical-align: -1px;
+  margin-left: 5px;
+  color: var(--accent);
+}
+.timer-ring {
+  position: relative;
+  width: min(100%, calc(var(--k) * 96px));
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.timer-ring svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+.timer-ring circle {
+  fill: none;
+  stroke-width: 6;
+}
+.timer-ring .track {
+  stroke: var(--surface-3);
+}
+.timer-ring .bar {
+  stroke: var(--accent);
+  stroke-linecap: round;
+  transition: stroke-dashoffset 250ms linear;
+}
+.timer-card.over .timer-ring .bar {
+  stroke: var(--danger);
+}
+.timer-ring .timer-time {
+  font-size: calc(19px * var(--k));
+}
+.timer-ring .timer-time.long {
+  font-size: calc(12px * var(--k));
+}
+.timer-card.view-ring {
+  gap: calc(4px * var(--k));
+  padding-top: calc(8px * var(--k));
+}
 .timer-progress {
   width: 80%;
   height: calc(4px * var(--k));
@@ -657,125 +708,211 @@
   padding: 0 4px;
 }
 .counter-step {
+  display: flex;
+  gap: calc(8px * var(--k));
   font-size: calc(11px * var(--k));
   color: var(--ink-3);
   font-variant-numeric: tabular-nums;
+}
+.counter-unit {
+  font-weight: 650;
+  color: var(--ink-2);
 }
 
 /* ------------------------------- кубики ------------------------------- */
 
 .dice-card {
+  --pip: #16161c;
+  --pip-1: #d6283b;
+  --face-a: #fdfdfd;
+  --face-b: #dcdce3;
+  --edge: #c4c4cc;
+  --num: #17171d;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: calc(8px * min(var(--k), 1.4));
-  padding: 12px 14px;
+  padding: 10px 14px;
+  overflow: hidden;
+}
+/* без своего цвета «цветные» кубики берут акцент, «стеклянные» — голубой */
+.dice-card.look-color.nocolor {
+  --c: var(--accent);
+}
+.dice-card.look-glass.nocolor {
+  --c: #7aa7ff;
+}
+.dice-card.look-color {
+  --face-a: color-mix(in oklab, var(--c, var(--accent)) 62%, #fff);
+  --face-b: color-mix(in oklab, var(--c, var(--accent)) 92%, #000);
+  --edge: color-mix(in oklab, var(--c, var(--accent)) 80%, #000);
+  --pip: #fff;
+  --pip-1: #fff;
+  --num: #fff;
+}
+.dice-card.look-dark {
+  --face-a: #3a3a44;
+  --face-b: #15151a;
+  --edge: #1d1d23;
+  --pip: #f4f4f6;
+  --pip-1: #ffcc33;
+  --num: #f4f4f6;
+}
+.dice-card.look-glass {
+  --face-a: color-mix(in oklab, var(--c, #7aa7ff) 30%, rgb(255 255 255 / 0.55));
+  --face-b: color-mix(in oklab, var(--c, #7aa7ff) 55%, rgb(255 255 255 / 0.2));
+  --edge: color-mix(in oklab, var(--c, #7aa7ff) 60%, rgb(255 255 255 / 0.3));
+  --pip: #fff;
+  --pip-1: #fff;
+  --num: #fff;
 }
 .dice-row {
   display: grid;
   grid-template-columns: repeat(var(--cols), var(--die));
   gap: var(--gap);
   justify-content: center;
-  padding: 2px;
+  padding: calc(var(--pad, 0px) + 2px) calc(var(--pad, 0px) + 2px) calc(var(--pad, 0px) + var(--die) * 0.1);
   border-radius: var(--r-2);
   cursor: pointer;
 }
 .dice-row:disabled {
   cursor: default;
 }
-.die {
+.die-slot {
   position: relative;
   width: var(--die);
   height: var(--die);
-  display: grid;
-  place-items: center;
-  border-radius: calc(var(--die) * 0.22);
-  background: linear-gradient(155deg, color-mix(in oklab, var(--c, #fff) 14%, #f4f4f6), color-mix(in oklab, var(--c, #fff) 22%, #c9c9d2));
-  color: #1a1a20;
-  box-shadow:
-    inset 0 -3px 0 rgb(0 0 0 / 0.16),
-    inset 0 1px 0 rgb(255 255 255 / 0.7),
-    0 4px 10px rgb(0 0 0 / 0.35);
-  transition: transform 160ms var(--ease-spring);
+  perspective: calc(var(--die) * 5);
+  transition: opacity 220ms var(--ease-out), filter 220ms;
 }
-.dice-row:hover:not(:disabled) .die {
-  transform: translateY(-2px) rotate(-3deg);
+.die-slot.dropped {
+  opacity: 0.38;
+  filter: saturate(0.4);
 }
-.dice-row:hover:not(:disabled) .die:nth-child(even) {
-  transform: translateY(-2px) rotate(3deg);
-}
-.die b {
-  font-size: calc(var(--die) * 0.42);
-  font-weight: 760;
-  letter-spacing: -0.03em;
-  font-variant-numeric: tabular-nums;
-}
-.die.d6 {
-  grid-template-columns: repeat(3, 1fr);
-  grid-template-rows: repeat(3, 1fr);
-  padding: calc(var(--die) * 0.14);
-  gap: calc(var(--die) * 0.04);
-}
-.die.d6 i {
-  width: 72%;
-  height: 72%;
+.die-shadow {
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  bottom: calc(var(--die) * -0.1);
+  height: calc(var(--die) * 0.2);
   border-radius: 50%;
+  background: radial-gradient(closest-side, rgb(0 0 0 / 0.38), transparent);
+  pointer-events: none;
 }
-.die.d6 i.on {
-  background: radial-gradient(circle at 35% 35%, #4a4a55, #111116);
-  box-shadow: inset 0 1px 1px rgb(0 0 0 / 0.5);
+.die-hop,
+.die-body {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
 }
-.die.blank {
-  background: color-mix(in oklab, var(--c, var(--ink)) 8%, var(--surface-2));
-  color: var(--ink-3);
-  box-shadow: inset 0 0 0 1.5px var(--line-3);
+.dice-row:hover:not(:disabled) .die-hop {
+  translate: 0 -3px;
+  transition: translate 160ms var(--ease-spring);
 }
-.die.blank b {
-  font-size: calc(var(--die) * 0.36);
+/* кубик (SVG): тёмный ободок → тело со светом → грани с точками */
+.cube svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
 }
-.dice-row.rolling .die {
-  animation: die-roll 490ms cubic-bezier(0.3, 0.7, 0.4, 1) both;
+.cube .c-rim {
+  fill: rgb(0 0 0 / 0.32);
+  stroke: rgb(0 0 0 / 0.32);
+  stroke-linejoin: round;
 }
-.dice-row.rolling .die:nth-child(even) {
-  animation-name: die-roll-2;
+.cube .c-body {
+  stroke-linejoin: round;
 }
-@keyframes die-roll {
-  0% {
-    transform: translateY(0) rotate(0);
+.cube .c-face {
+  stroke: rgb(255 255 255 / 0.18);
+  stroke-width: 1.5;
+}
+.cube .c-pip {
+  fill: var(--pip);
+  stroke: color-mix(in oklab, var(--pip) 75%, #000);
+  stroke-width: 1.5;
+}
+.cube .c-pip.one {
+  fill: var(--pip-1);
+  stroke: color-mix(in oklab, var(--pip-1) 70%, #000);
+}
+.cube .c-num {
+  fill: var(--num);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+.cube.blank {
+  opacity: 0.9;
+}
+.look-glass .cube .c-face {
+  stroke: rgb(255 255 255 / 0.5);
+}
+/* многогранники */
+.poly svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 calc(var(--die) * 0.03) calc(var(--die) * 0.04) rgb(0 0 0 / 0.3));
+}
+.poly .ps {
+  stroke: var(--edge);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+}
+.poly .pf {
+  fill: none;
+  stroke: color-mix(in oklab, var(--edge) 70%, transparent);
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+}
+.poly circle.pf {
+  stroke-dasharray: 3 4;
+}
+.poly text {
+  fill: var(--num);
+  font-weight: 800;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+/* подсветка — на клетке, а не на самом кубике: filter на 3D-теле «сплющивает»
+   его, и вместо выпавшей грани видна передняя (шестёрка выглядела как единица) */
+.die-slot.max {
+  filter: drop-shadow(0 0 calc(var(--die) * 0.12) #ffc83d);
+}
+.die-slot.min {
+  filter: drop-shadow(0 0 calc(var(--die) * 0.1) #ff4d5e);
+}
+.die-slot.max .die-body {
+  animation: die-crit 900ms var(--ease-out) 1;
+}
+.die-slot.min .die-body {
+  animation: die-fumble 520ms ease-in-out 1;
+}
+@keyframes die-crit {
+  30% {
+    scale: 1.14;
   }
-  25% {
-    transform: translateY(-22%) rotate(-140deg) scale(0.92);
+}
+@keyframes die-fumble {
+  20%,
+  60% {
+    translate: -4% 0;
   }
-  55% {
-    transform: translateY(4%) rotate(-250deg) scale(1.04);
-  }
+  40%,
   80% {
-    transform: translateY(-4%) rotate(-340deg);
-  }
-  100% {
-    transform: translateY(0) rotate(-360deg);
-  }
-}
-@keyframes die-roll-2 {
-  0% {
-    transform: translateY(0) rotate(0);
-  }
-  25% {
-    transform: translateY(-18%) rotate(150deg) scale(0.92);
-  }
-  55% {
-    transform: translateY(5%) rotate(260deg) scale(1.05);
-  }
-  80% {
-    transform: translateY(-3%) rotate(335deg);
-  }
-  100% {
-    transform: translateY(0) rotate(360deg);
+    translate: 4% 0;
   }
 }
 .dice-info {
   max-width: 100%;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
   font-size: calc(12.5px * min(var(--k), 1.5));
   color: var(--ink-3);
   white-space: nowrap;
@@ -783,13 +920,42 @@
   text-overflow: ellipsis;
   font-variant-numeric: tabular-nums;
 }
-.dice-info b {
+.dice-sum {
   color: var(--ink);
-  font-size: 1.25em;
-  font-weight: 720;
+  font-size: 1.6em;
+  font-weight: 780;
+  line-height: 1;
+  animation: dice-pop 380ms var(--ease-spring);
 }
-.dice-info span {
+@keyframes dice-pop {
+  from {
+    scale: 0.5;
+    opacity: 0;
+  }
+}
+.dice-f {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dice-who {
   font-weight: 600;
+}
+.dice-hist {
+  display: flex;
+  gap: 4px;
+  max-width: 100%;
+  overflow: hidden;
+}
+.dice-hist span {
+  min-width: 22px;
+  padding: 1px 6px;
+  border-radius: 99px;
+  font-size: calc(11px * min(var(--k), 1.4));
+  font-weight: 650;
+  text-align: center;
+  color: var(--ink-2);
+  background: color-mix(in oklab, var(--hc, var(--ink-3)) 14%, var(--surface-2));
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--hc, var(--ink-3)) 30%, transparent);
 }
 
 /* ------------------------------ прогресс ------------------------------ */
@@ -834,6 +1000,39 @@
 }
 .progress-card.full .progress-val {
   color: var(--c-green);
+}
+.progress-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.progress-row .progress-track {
+  flex: 1;
+}
+.progress-btn {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--ink-2);
+  background: var(--surface-3);
+  transition:
+    background 120ms,
+    color 120ms,
+    transform 120ms var(--ease-spring);
+}
+.progress-btn:hover:not(:disabled) {
+  color: var(--ink);
+  background: color-mix(in oklab, var(--pc) 28%, var(--surface-3));
+}
+.progress-btn:active:not(:disabled) {
+  transform: scale(0.9);
+}
+.progress-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 .progress-track {
   position: relative;
@@ -964,7 +1163,8 @@
   box-shadow: 0 0 0 1.5px var(--bg);
 }
 
-[data-reduce-motion] .dice-row.rolling .die,
+[data-reduce-motion] .die-slot .die-body,
+[data-reduce-motion] .dice-sum,
 [data-reduce-motion] .counter-n.up,
 [data-reduce-motion] .counter-n.down {
   animation: none;

@@ -20,9 +20,11 @@ export interface Settings {
   smartDraw: boolean;
   minimap: boolean;
   reduceMotion: boolean;
+  /** Звуки объектов (таймер, кубики, игры). */
+  sound: boolean;
   /** Левая панель «Библиотека»: открыта ли и на каком разделе. */
   library: boolean;
-  libCat: "basic" | "widgets" | "shapes" | "stickers" | "templates" | "services";
+  libCat: "basic" | "widgets" | "games" | "shapes" | "stickers" | "templates" | "services";
 }
 
 const DEFAULTS: Settings = {
@@ -38,6 +40,7 @@ const DEFAULTS: Settings = {
   smartDraw: true,
   minimap: false,
   reduceMotion: false,
+  sound: true,
   library: false,
   libCat: "basic",
 };

@@ -12,10 +12,33 @@
 import { SvelteMap } from "svelte/reactivity";
 import * as Y from "yjs";
 import type { Board } from "./board.svelte.ts";
-import { colorKey, type LogicRule, type NodeData, type NodeType } from "./model.ts";
-import { counterValue, deltaKey, rollDice } from "./nodes/games.ts";
-import { timerLeft, timerPatch } from "./nodes/timer.ts";
-import { doneShare, gateValue, inputsOf, isOn, marksOf, numValue, outputsOf, statusesOf, nodeTitle, calcValue } from "./nodes/values.ts";
+import { colorKey, dayKey, scoreKey, type LogicRule, type NodeData, type NodeProps, type NodeType } from "./model.ts";
+import { counterAddPatch, counterSetPatch, counterValue, rollDice } from "./nodes/games.ts";
+import {
+  COIN_MS,
+  RANDOM_MS,
+  buzzesOf,
+  checklistPatch,
+  clearPatch,
+  coinPatch,
+  drawPatch,
+  isBuzzKey,
+  isDayKey,
+  isScoreKey,
+  isWordsKey,
+  playersOf,
+  randomPatch,
+  scoreOf,
+  scoreSig,
+  shufflePatch,
+  swPatch,
+  swRunning,
+  todayIso,
+  turnPatch,
+  wordsCount,
+} from "./nodes/play.ts";
+import { DAY, loopEnd, timerLeft, timerPatch } from "./nodes/timer.ts";
+import { doneShare, gateValue, inputNumber, inputsOf, isOn, marksOf, numValue, outputsOf, statusesOf, nodeTitle, calcValue } from "./nodes/values.ts";
 import { SPIN_MS, fxPatch, markPatch, spinWheel, wheelOptions, wheelResult } from "./nodes/widgets.ts";
 import { LOGIC, LOGIC_SYNC, QUIET, type BoardStore, type NodeView } from "./store.svelte.ts";
 
@@ -38,7 +61,7 @@ export interface ActDef {
   id: string;
   label: string;
   n?: { label: string; def: number; unit?: string };
-  x?: "color" | "fx" | "text" | "state";
+  x?: "color" | "fx" | "text" | "state" | "player";
   inv?: string;
 }
 
@@ -114,6 +137,79 @@ export function triggersFor(t: NodeType): TrigDef[] {
         { id: "complete", label: "выполнены все пункты списка", inv: "uncomplete" },
         { id: "change", label: "изменили пункты или текст" },
       ];
+    case "stopwatch":
+      return [
+        { id: "start", label: "запустили", inv: "stop" },
+        { id: "stop", label: "остановили", inv: "start" },
+        { id: "lap", label: "отметили круг" },
+        { id: "reset", label: "сбросили" },
+      ];
+    case "coin":
+      return [
+        { id: "flip", label: "подбросили", delay: COIN_MS + 100 },
+        { id: "side0", label: "выпала первая сторона (орёл)", delay: COIN_MS + 100 },
+        { id: "side1", label: "выпала вторая сторона (решка)", delay: COIN_MS + 100 },
+      ];
+    case "flipcard":
+      return [
+        { id: "on", label: "перевернули на ответ", inv: "off" },
+        { id: "off", label: "вернули на вопрос", inv: "on" },
+        { id: "change", label: "перевернули" },
+      ];
+    case "spoiler":
+      return [
+        { id: "on", label: "открыли", inv: "off" },
+        { id: "off", label: "снова спрятали", inv: "on" },
+      ];
+    case "deck":
+      return [
+        { id: "draw", label: "вытянули карту", delay: 450 },
+        { id: "empty", label: "кончились карты", inv: "refill" },
+        { id: "shuffle", label: "перемешали" },
+      ];
+    case "random":
+      return [
+        { id: "pick", label: "выбрал", delay: RANDOM_MS },
+        { id: "pickhi", label: "выпало число не меньше", n: "Число", delay: RANDOM_MS },
+      ];
+    case "score":
+      return [
+        { id: "change", label: "изменился счёт" },
+        { id: "reach", label: "кто-то набрал", n: "Очки", inv: "unreach" },
+      ];
+    case "turns":
+      return [
+        { id: "next", label: "ход перешёл" },
+        { id: "round", label: "начался новый раунд" },
+      ];
+    case "buzzer":
+      return [
+        { id: "first", label: "кто-то нажал первым", inv: "cleared" },
+        { id: "press", label: "нажали" },
+      ];
+    case "checklist":
+      return [
+        { id: "mark", label: "отметили пункт", inv: "unmark" },
+        { id: "unmark", label: "сняли отметку", inv: "mark" },
+        { id: "complete", label: "отмечены все пункты", inv: "uncomplete" },
+        { id: "change", label: "изменился" },
+      ];
+    case "input":
+      return [
+        { id: "change", label: "изменили" },
+        { id: "filled", label: "заполнили", inv: "emptied" },
+        { id: "reach", label: "число достигло", n: "Значение", inv: "unreach" },
+      ];
+    case "calendar":
+      return [
+        { id: "mark", label: "отметили день", inv: "unmark" },
+        { id: "change", label: "изменились отметки" },
+      ];
+    case "words":
+      return [
+        { id: "add", label: "добавили слово" },
+        { id: "change", label: "изменилось" },
+      ];
   }
   return [];
 }
@@ -172,6 +268,64 @@ export function actionsFor(t: NodeType): ActDef[] {
       return [{ id: "mark", label: "отметить следующую клетку", inv: "unmark" }, { id: "unmark", label: "снять последнюю отметку", inv: "mark" }, { id: "clear", label: "очистить" }, ...COMMON];
     case "button":
       return [{ id: "press", label: "нажать" }, ...COMMON];
+    case "stopwatch":
+      return [
+        { id: "start", label: "запустить", inv: "stop" },
+        { id: "stop", label: "остановить", inv: "start" },
+        { id: "toggle", label: "запустить или остановить" },
+        { id: "lap", label: "отметить круг" },
+        { id: "reset", label: "сбросить" },
+        ...COMMON,
+      ];
+    case "coin":
+      return [{ id: "flip", label: "подбросить" }, ...COMMON];
+    case "flipcard":
+      return [
+        { id: "on", label: "показать ответ", inv: "off" },
+        { id: "off", label: "показать вопрос", inv: "on" },
+        { id: "toggle", label: "перевернуть" },
+        { id: "mirror", label: "повторять за источником" },
+        ...COMMON,
+      ];
+    case "spoiler":
+      return [
+        { id: "on", label: "открыть", inv: "off" },
+        { id: "off", label: "спрятать снова", inv: "on" },
+        { id: "toggle", label: "открыть или спрятать" },
+        { id: "mirror", label: "повторять за источником" },
+        ...COMMON,
+      ];
+    case "deck":
+      return [{ id: "draw", label: "вытянуть карту" }, { id: "shuffle", label: "перемешать" }, ...COMMON];
+    case "random":
+      return [{ id: "pick", label: "выбрать случайно" }, ...COMMON];
+    case "score":
+      return [
+        { id: "add", label: "прибавить очки", n: { label: "Сколько", def: 1 }, x: "player", inv: "sub" },
+        { id: "sub", label: "отнять очки", n: { label: "Сколько", def: 1 }, x: "player", inv: "add" },
+        { id: "set", label: "установить очки", n: { label: "Значение", def: 0 }, x: "player" },
+        { id: "addsrc", label: "прибавить число источника", x: "player", inv: "subsrc" },
+        { id: "reset", label: "обнулить счёт" },
+        ...COMMON,
+      ];
+    case "turns":
+      return [{ id: "next", label: "передать ход", inv: "prev" }, { id: "prev", label: "вернуть ход назад", inv: "next" }, { id: "restart", label: "начать сначала" }, ...COMMON];
+    case "buzzer":
+      return [{ id: "clear", label: "сбросить нажатия" }, ...COMMON];
+    case "checklist":
+      return [
+        { id: "mark", label: "отметить следующий пункт", inv: "unmark" },
+        { id: "unmark", label: "снять последнюю отметку", inv: "mark" },
+        { id: "markall", label: "отметить все пункты", inv: "clear" },
+        { id: "clear", label: "снять все отметки" },
+        ...COMMON,
+      ];
+    case "input":
+      return [{ id: "settext", label: "вписать текст", x: "text", inv: "clear" }, ...NUM_ACTS(), { id: "clear", label: "очистить" }, ...COMMON];
+    case "calendar":
+      return [{ id: "markday", label: "отметить сегодня (за себя)" }, { id: "clear", label: "убрать все отметки" }, ...COMMON];
+    case "words":
+      return [{ id: "clear", label: "очистить облако" }, ...COMMON];
     case "gate":
     case "calc":
     case "chart":
@@ -203,10 +357,17 @@ export function suggestRule(src: NodeType, tgt: NodeType): LogicRule | null {
   const has = (id: string) => acts.some((a) => a.id === id);
   const first = trs[0]!.id;
   if (src === "button") {
-    const pref = ["add", "roll", "spin", "start", "toggle", "next", "mark", "press"].find(has) ?? "fx";
+    const pref = tgt === "stopwatch" || tgt === "flipcard" || tgt === "spoiler" ? "toggle" : ["add", "roll", "spin", "flip", "draw", "pick", "start", "toggle", "next", "mark", "press"].find(has) ?? "fx";
     return { on: "press", do: pref, n: pref === "add" ? (tgt === "progress" ? 10 : 1) : undefined, x: pref === "fx" ? "confetti" : undefined };
   }
-  if (src === "dice" && tgt === "counter") return { on: "roll", do: "addsrc" };
+  if ((src === "dice" || src === "random") && (tgt === "counter" || tgt === "score")) return { on: src === "dice" ? "roll" : "pick", do: "addsrc" };
+  if (src === "coin" || src === "deck" || src === "random" || src === "buzzer" || src === "turns" || src === "words") {
+    const on = src === "coin" ? "flip" : src === "deck" ? "draw" : src === "random" ? "pick" : src === "buzzer" ? "first" : src === "turns" ? "next" : "add";
+    const pref = ["add", "roll", "spin", "flip", "draw", "pick", "next", "mark", "toggle", "on"].find(has);
+    if (pref) return { on, do: pref, n: pref === "add" ? (tgt === "progress" ? 10 : 1) : undefined };
+    return { on, do: "fx", x: src === "buzzer" ? "ding" : "confetti", rev: false };
+  }
+  if (src === "stopwatch" && tgt === "timer") return { on: "start", do: "start" };
   if (src === "wheel") return { on: "result", do: has("add") ? "add" : "fx", n: has("add") ? 1 : undefined, x: has("add") ? undefined : "confetti" };
   if (src === "timer") return { on: "end", do: has("check") ? "check" : has("on") ? "on" : "fx", x: has("check") || has("on") ? undefined : "ding" };
   if (has("share")) return { on: "change", do: "share", n: src === "counter" || src === "calc" || src === "dice" ? 10 : undefined };
@@ -214,7 +375,8 @@ export function suggestRule(src: NodeType, tgt: NodeType): LogicRule | null {
   if ((src === "switch" || src === "gate") && has("mirror")) return { on: "change", do: "mirror" };
   if (has("all")) return { on: "change", do: "all" };
   if (src === "progress") return { on: "full", do: "fx", x: "confetti", rev: false };
-  if (src === "tracker" || src === "note" || src === "text") return { on: "complete", do: "fx", x: "confetti", rev: false };
+  if (src === "tracker" || src === "checklist" || src === "note" || src === "text") return { on: "complete", do: "fx", x: "confetti", rev: false };
+  if (src === "flipcard" || src === "spoiler") return { on: "on", do: has("on") ? "on" : has("show") ? "show" : acts[0]!.id, rev: true };
   if (src === "switch" || src === "gate") return { on: "on", do: "show", rev: true };
   if (src === "task") return { on: "done", do: "fx", x: "confetti", rev: false };
   return { on: first, do: acts[0]!.id, n: acts[0]!.n?.def };
@@ -276,6 +438,16 @@ const SUMMARY: Record<string, string> = {
   clear: "⌫",
   addsrc: "+n",
   subsrc: "−n",
+  lap: "⏱",
+  flip: "🪙",
+  draw: "🃏",
+  shuffle: "🔀",
+  pick: "🎰",
+  prev: "←",
+  restart: "⟲",
+  markall: "✓✓",
+  settext: "✎",
+  markday: "📅",
 };
 
 /** Стрелка годится для логики: оба конца привязаны к разным объектам. */
@@ -329,8 +501,44 @@ function snapOf(s: BoardStore, v: NodeView): Snap {
     case "poll":
       x = JSON.stringify(Object.entries(p).filter(([key]) => key.startsWith("vote:")));
       break;
+    case "stopwatch":
+      k = p.laps?.length ?? 0;
+      x = swRunning(p) || (p.acc ?? 0) > 0 ? "run" : "zero";
+      break;
+    case "coin":
+      k = p.coin?.s ?? 0;
+      x = String(p.coin?.v ?? "");
+      break;
+    case "deck":
+      k = p.top?.s ?? 0;
+      x = String(p.shf ?? 0);
+      break;
+    case "random":
+      k = p.rnd?.s ?? 0;
+      x = p.rnd?.v ?? "";
+      break;
+    case "score":
+      x = scoreSig(p);
+      break;
+    case "turns":
+      k = Math.max(1, p.rn ?? 1);
+      x = String(p.cur ?? 0);
+      break;
+    case "buzzer":
+      k = buzzesOf(p).length;
+      break;
+    case "input":
+      x = p.iv ?? "";
+      break;
+    case "calendar":
+      k = Object.entries(p as Record<string, unknown>).filter(([key, val]) => val && isDayKey(key)).length;
+      break;
+    case "words":
+      k = wordsCount(p);
+      break;
   }
-  const on = v.type === "switch" || v.type === "gate" ? !!p.on : v.type === "task" ? !!p.done : (sh ?? 0) >= 0.9999;
+  const on =
+    v.type === "switch" || v.type === "gate" || v.type === "flipcard" || v.type === "spoiler" ? !!p.on : v.type === "task" ? !!p.done : v.type === "stopwatch" ? swRunning(p) : (sh ?? 0) >= 0.9999;
   return { n: numValue(s, v), sh, on, k, x };
 }
 
@@ -404,6 +612,76 @@ function eventsFor(type: NodeType, o: Snap, c: Snap, r: LogicRule): Set<string> 
     case "shape":
       if (o.sh !== c.sh || o.n !== c.n) ev.add("change");
       if (o.on !== c.on) ev.add(c.on ? "complete" : "uncomplete");
+      break;
+    case "stopwatch":
+      if (o.on !== c.on) ev.add(c.on ? "start" : "stop");
+      if (c.k > o.k) ev.add("lap");
+      if (o.x === "run" && c.x === "zero") ev.add("reset");
+      break;
+    case "coin":
+      if (c.k !== o.k && c.k > 0) {
+        ev.add("flip");
+        if (c.x === "0") ev.add("side0");
+        if (c.x === "1") ev.add("side1");
+      }
+      break;
+    case "flipcard":
+    case "spoiler":
+      if (o.on !== c.on) ev.add(c.on ? "on" : "off").add("change");
+      break;
+    case "deck":
+      if (c.k !== o.k && c.k > 0) ev.add("draw");
+      if (num(o.n) > 0 && num(c.n) === 0) ev.add("empty");
+      if (num(o.n) === 0 && num(c.n) > 0) ev.add("refill");
+      if (c.x !== o.x) ev.add("shuffle");
+      break;
+    case "random":
+      if (c.k !== o.k && c.k > 0) {
+        ev.add("pick");
+        if (!Number.isNaN(N) && c.n !== null && c.n >= N) ev.add("pickhi");
+      }
+      break;
+    case "score":
+      if (c.x !== o.x) ev.add("change");
+      if (!Number.isNaN(N)) {
+        if (num(o.n) < N && num(c.n) >= N) ev.add("reach");
+        if (num(o.n) >= N && num(c.n) < N) ev.add("unreach");
+      }
+      break;
+    case "turns":
+      if (c.x !== o.x || c.k !== o.k) ev.add("next");
+      if (c.k > o.k) ev.add("round");
+      break;
+    case "buzzer":
+      if (c.k > o.k) ev.add("press");
+      if (o.k === 0 && c.k > 0) ev.add("first");
+      if (o.k > 0 && c.k === 0) ev.add("cleared");
+      break;
+    case "checklist":
+      if (num(c.n) > num(o.n)) ev.add("mark");
+      if (num(c.n) < num(o.n)) ev.add("unmark");
+      if (o.on !== c.on) ev.add(c.on ? "complete" : "uncomplete");
+      if (num(c.n) !== num(o.n) || o.sh !== c.sh) ev.add("change");
+      break;
+    case "input":
+      if (c.x !== o.x) {
+        ev.add("change");
+        if (!o.x.trim() && c.x.trim()) ev.add("filled");
+        if (o.x.trim() && !c.x.trim()) ev.add("emptied");
+        if (!Number.isNaN(N)) {
+          if (num(o.n) < N && num(c.n) >= N) ev.add("reach");
+          if (num(o.n) >= N && num(c.n) < N) ev.add("unreach");
+        }
+      }
+      break;
+    case "calendar":
+      if (c.k > o.k) ev.add("mark");
+      if (c.k < o.k) ev.add("unmark");
+      if (c.k !== o.k) ev.add("change");
+      break;
+    case "words":
+      if (c.k > o.k) ev.add("add");
+      if (c.k !== o.k) ev.add("change");
       break;
   }
   return ev;
@@ -631,6 +909,10 @@ export class Logic {
       const x = this.cur(patches, t, key);
       return (typeof x === "number" ? x : d);
     };
+    /** Свойства цели с учётом уже назначенных в этой пачке правок. */
+    const merged = () => ({ ...t.props, ...(patches.get(t.id) ?? {}) }) as NodeProps;
+    const mergedView = () => ({ ...t, id: t.id, type: t.type, props: merged() }) as unknown as NodeView;
+    const who = () => ({ n: this.b.me.name, c: this.b.me.color });
     switch (what) {
       case "add":
       case "sub":
@@ -638,15 +920,19 @@ export class Logic {
       case "addsrc":
       case "subsrc": {
         const delta = what === "add" ? n : what === "sub" ? -n : what === "addsrc" ? (numValue(s, src) ?? 0) : what === "subsrc" ? -(numValue(s, src) ?? 0) : 0;
+        const mp = merged();
         if (t.type === "counter") {
-          if (what === "set") {
-            let deltas = 0;
-            for (const [k, x] of Object.entries(t.props as Record<string, unknown>)) if (k.startsWith("d:") && typeof x === "number") deltas += x;
-            this.put(patches, t.id, { n0: Math.round((n - deltas) * 1000) / 1000 });
-          } else {
-            const k = deltaKey(this.b.me.id);
-            this.put(patches, t.id, { [k]: Math.round((num(k, 0) + delta) * 1000) / 1000 });
-          }
+          const patch = what === "set" ? counterSetPatch(mp, n) : counterAddPatch(mp, this.b.me.id, delta);
+          if (patch) this.put(patches, t.id, patch);
+        } else if (t.type === "score") {
+          const pl = playersOf(mp);
+          const pid = pl.find((x) => x.id === r.x)?.id ?? pl[0]?.id;
+          if (!pid) break;
+          const val = Math.round((what === "set" ? n : scoreOf(mp, pid) + delta) * 1000) / 1000;
+          this.put(patches, t.id, { [scoreKey(pid)]: val || undefined });
+        } else if (t.type === "input") {
+          const val = Math.round((what === "set" ? n : (inputNumber(mp) ?? 0) + delta) * 1000) / 1000;
+          this.put(patches, t.id, { iv: String(val) });
         } else if (t.type === "progress") {
           const v0 = num("pv", 0);
           this.put(patches, t.id, { pv: Math.round(Math.max(0, Math.min(100, what === "set" ? n : v0 + delta))) });
@@ -664,15 +950,49 @@ export class Logic {
       case "mirror":
       case "on":
       case "off": {
+        if (t.type === "stopwatch") {
+          if (what === "toggle") this.put(patches, t.id, swPatch(merged(), "toggle"));
+          break;
+        }
         const key = t.type === "task" ? "done" : "on";
         const curOn = !!this.cur(patches, t, key);
         const next = what === "check" || what === "on" ? true : what === "uncheck" || what === "off" ? false : what === "toggle" ? !curOn : isOn(s, src);
-        if (t.type === "task" || t.type === "switch") this.put(patches, t.id, { [key]: next || undefined });
-        else if (t.type === "timer") {
-          /* таймер: on — запустить */
-        }
+        if (t.type === "task" || t.type === "switch" || t.type === "flipcard" || t.type === "spoiler") this.put(patches, t.id, { [key]: next || undefined });
         break;
       }
+      case "lap":
+        if (t.type === "stopwatch") this.put(patches, t.id, swPatch(merged(), "lap"));
+        break;
+      case "flip":
+        if (t.type === "coin") this.put(patches, t.id, coinPatch(merged(), who()));
+        break;
+      case "draw": {
+        const patch = t.type === "deck" ? drawPatch(merged(), who()) : null;
+        if (patch) this.put(patches, t.id, patch);
+        break;
+      }
+      case "shuffle":
+        if (t.type === "deck") this.put(patches, t.id, shufflePatch(merged()));
+        break;
+      case "pick": {
+        const patch = t.type === "random" ? randomPatch(this.b, mergedView(), who()) : null;
+        if (patch) this.put(patches, t.id, patch);
+        break;
+      }
+      case "prev":
+      case "restart":
+        if (t.type !== "turns") break;
+        this.put(patches, t.id, what === "prev" ? turnPatch(merged(), -1) : { cur: 0, rn: 1 });
+        break;
+      case "markall":
+        if (t.type === "checklist") this.put(patches, t.id, checklistPatch(mergedView(), "all"));
+        break;
+      case "settext":
+        if (t.type === "input") this.put(patches, t.id, { iv: (r.x ?? "").slice(0, 500) || undefined });
+        break;
+      case "markday":
+        if (t.type === "calendar") this.put(patches, t.id, { [`${dayKey(todayIso())}:${this.b.me.id}`]: who() });
+        break;
       case "roll":
         side.roll.push(t.id);
         break;
@@ -682,6 +1002,14 @@ export class Logic {
       case "start":
       case "stop":
       case "reset": {
+        if (t.type === "stopwatch") {
+          this.put(patches, t.id, swPatch(merged(), what as "start" | "stop" | "reset"));
+          break;
+        }
+        if (t.type === "score" && what === "reset") {
+          this.put(patches, t.id, clearPatch(merged(), isScoreKey));
+          break;
+        }
         if (t.type !== "timer") break;
         const now = Date.now();
         const running = typeof t.props.end === "number" && timerLeft(t.props, now) > 0;
@@ -691,6 +1019,10 @@ export class Logic {
       }
       case "next":
       case "setst": {
+        if (t.type === "turns") {
+          if (what === "next") this.put(patches, t.id, turnPatch(merged(), 1));
+          break;
+        }
         const list = statusesOf(t.props);
         const cur = num("st", 0);
         const idx = what === "next" ? (cur + 1) % list.length : Math.max(0, Math.min(list.length - 1, Number(r.x ?? 0) || 0));
@@ -700,10 +1032,21 @@ export class Logic {
       case "mark":
       case "unmark":
       case "clear": {
+        if (t.type === "checklist") {
+          this.put(patches, t.id, checklistPatch(mergedView(), what === "mark" ? "next" : what === "unmark" ? "last" : "clear"));
+          break;
+        }
+        if (what === "clear" && (t.type === "buzzer" || t.type === "calendar" || t.type === "words")) {
+          this.put(patches, t.id, clearPatch(merged(), t.type === "buzzer" ? isBuzzKey : t.type === "calendar" ? isDayKey : isWordsKey));
+          break;
+        }
+        if (what === "clear" && t.type === "input") {
+          this.put(patches, t.id, { iv: undefined });
+          break;
+        }
         if (t.type !== "tracker") break;
         // учитываем уже назначенные в этой пачке отметки
-        const merged = { ...t, props: { ...t.props, ...(patches.get(t.id) ?? {}) } } as unknown as NodeView;
-        this.put(patches, t.id, markPatch(merged, what === "mark" ? "next" : what === "unmark" ? "last" : "clear"));
+        this.put(patches, t.id, markPatch(mergedView(), what === "mark" ? "next" : what === "unmark" ? "last" : "clear"));
         break;
       }
       case "press": {
@@ -723,11 +1066,9 @@ export class Logic {
       case "color":
         if (r.x) this.put(patches, t.id, { color: colorKey(r.x) });
         break;
-      case "fx": {
-        const merged = { props: { ...t.props, ...(patches.get(t.id) ?? {}) } } as unknown as NodeView;
-        this.put(patches, t.id, fxPatch(merged, r.x || "confetti"));
+      case "fx":
+        this.put(patches, t.id, fxPatch(mergedView(), r.x || "confetti"));
         break;
-      }
       case "say":
         if (r.x?.trim()) side.say.push({ text: r.x.trim(), ref: t.id });
         break;
@@ -769,11 +1110,8 @@ export class Logic {
       const sv = Math.round((lo + avg * (hi - lo)) * 100) / 100;
       if ((t.props.sv ?? 0) !== sv) this.put(patches, id, { sv });
     } else if (t.type === "counter" && kind === "count") {
-      if (counterValue(t.props) !== count) {
-        let deltas = 0;
-        for (const [k, x] of Object.entries(t.props as Record<string, unknown>)) if (k.startsWith("d:") && typeof x === "number") deltas += x;
-        this.put(patches, id, { n0: count - deltas });
-      }
+      const want = counterSetPatch(t.props, count);
+      if (counterValue(t.props) !== counterValue({ ...t.props, ...want } as NodeProps)) this.put(patches, id, want);
     } else if ((t.type === "task" || t.type === "switch") && kind === "all") {
       const key = t.type === "task" ? "done" : "on";
       if (!!(t.props as Record<string, unknown>)[key] !== allOn) this.put(patches, id, { [key]: allOn || undefined });
@@ -821,31 +1159,38 @@ export class Logic {
 
   /* ------------------------------ таймеры ------------------------------ */
 
+  /** Сигнал «время вышло» для стрелок таймера. Долгие таймеры (дни) ждут
+      частями — setTimeout не умеет больше ~24 суток; «по кругу» — заново
+      после каждого круга. */
   private scheduleTimer(v: NodeView) {
     clearTimeout(this.timers.get(v.id));
     this.timers.delete(v.id);
     const end = v.props.end;
     if (typeof end !== "number") return;
-    const ms = end - Date.now();
-    if (ms < 0 || ms > 24 * 3600_000) return;
     const s = this.s;
     if (!outputsOf(s, v).some((a) => a.props.lg?.on === "end")) return;
-    this.timers.set(
-      v.id,
-      setTimeout(() => {
-        this.timers.delete(v.id);
-        const cur = s.get(v.id);
-        if (!cur || cur.props.end !== end || this.b.readonly) return;
-        const patches: Patches = new Map();
-        const side: Side = { say: [], go: null, roll: [], spin: [] };
-        for (const a of outputsOf(s, cur)) {
-          const r = a.props.lg;
-          const tgt = s.get(a.props.b1?.id);
-          if (r?.on === "end" && tgt && !DERIVED.has(r.do)) this.act(a, r, cur, tgt, 1, patches, side);
-        }
-        this.commit(patches, side, 1);
-      }, ms + 60),
-    );
+    const now = Date.now();
+    const at = end > now ? end : loopEnd(v.props, now);
+    if (at === null) return;
+    const fire = () => {
+      this.timers.delete(v.id);
+      const cur = s.get(v.id);
+      if (!cur || cur.props.end !== end || this.b.readonly) return;
+      const patches: Patches = new Map();
+      const side: Side = { say: [], go: null, roll: [], spin: [] };
+      for (const a of outputsOf(s, cur)) {
+        const r = a.props.lg;
+        const tgt = s.get(a.props.b1?.id);
+        if (r?.on === "end" && tgt && !DERIVED.has(r.do)) this.act(a, r, cur, tgt, 1, patches, side);
+      }
+      this.commit(patches, side, 1);
+      if (cur.props.loop) this.scheduleTimer(cur);
+    };
+    const arm = () => {
+      const ms = at - Date.now();
+      this.timers.set(v.id, ms > DAY ? setTimeout(arm, DAY) : setTimeout(fire, Math.max(0, ms) + 60));
+    };
+    arm();
   }
 
   private pulse(arrowId: string) {

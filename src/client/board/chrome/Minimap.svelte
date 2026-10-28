@@ -103,7 +103,7 @@
 <style>
   .mini {
     position: fixed;
-    right: 10px;
+    right: calc(10px + var(--insp, 0px));
     bottom: calc(12px + env(safe-area-inset-bottom, 0px));
     width: 210px;
     height: 142px;

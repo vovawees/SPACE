@@ -100,6 +100,26 @@ export class Camera {
   }
 
   /** То же для полосы экрана между верхом `top` и низом `bottom` (например, над листом снизу на телефоне). */
+  /** Показать прямоугольник в свободной части экрана: края, занятые панелями, не в счёт. */
+  revealIn(r: Rect, m: { top?: number; right?: number; bottom?: number; left?: number }, pad = 24) {
+    const L = (m.left ?? 0) + pad;
+    const R = this.vw - (m.right ?? 0) - pad;
+    const T = (m.top ?? 0) + pad;
+    const B = this.vh - (m.bottom ?? 0) - pad;
+    if (R - L < 60 || B - T < 40) return;
+    const a = this.toScreen(r.x, r.y);
+    const c = this.toScreen(r.x + r.w, r.y + r.h);
+    let dx = 0;
+    let dy = 0;
+    if (c.x - a.x > R - L) dx = (L + R) / 2 - (a.x + c.x) / 2;
+    else if (a.x < L) dx = L - a.x;
+    else if (c.x > R) dx = R - c.x;
+    if (c.y - a.y > B - T) dy = T - a.y;
+    else if (a.y < T) dy = T - a.y;
+    else if (c.y > B) dy = B - c.y;
+    if (dx || dy) this.go(this.x + dx, this.y + dy, this.z);
+  }
+
   revealBand(r: Rect, top: number, bottom: number, pad = 16) {
     const a = this.toScreen(r.x, r.y);
     const c = this.toScreen(r.x + r.w, r.y + r.h);

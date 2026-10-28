@@ -79,6 +79,7 @@
   import { toasts } from "../../lib/toast.svelte.ts";
   import { download, keyLabel } from "../../lib/util.ts";
   import { useBoard, type Tool } from "../board.svelte.ts";
+  import { typeIcon } from "../typeInfo.ts";
   import { addFiles } from "../files.ts";
   import { pickFiles } from "../menus.ts";
   import { TYPE_LABELS, type NodeType } from "../model.ts";
@@ -86,6 +87,7 @@
   import type { NodeView } from "../store.svelte.ts";
   import { tableText } from "../nodes/table.svelte.ts";
   import { LIB_ITEMS, useLibItem } from "../library.ts";
+  import Volume2 from "@lucide/svelte/icons/volume-2";
 
   type Icon = Component<Record<string, unknown>>;
   interface Cmd {
@@ -128,7 +130,7 @@
     when: () => !b.readonly || id === "select" || id === "hand" || id === "laser",
   });
   const st = session.settings;
-  const flag = (key: "grid" | "snap" | "glow" | "minimap" | "smartDraw", label: string, icon?: Icon): Cmd => ({
+  const flag = (key: "grid" | "snap" | "glow" | "minimap" | "smartDraw" | "sound", label: string, icon?: Icon): Cmd => ({
     id: "flag:" + key,
     label: `${st[key] ? "Выключить" : "Включить"}: ${label}`,
     icon,
@@ -164,7 +166,7 @@
         if (files.length) await addFiles(b, files, b.camera.center);
       },
     },
-    ...LIB_ITEMS.filter((i) => (i.cat === "basic" && !i.ask) || i.cat === "templates").map(
+    ...LIB_ITEMS.filter((i) => ((i.cat === "basic" || i.cat === "widgets" || i.cat === "games") && !i.ask) || i.cat === "templates").map(
       (i): Cmd => ({
         id: "lib:" + i.id,
         label: i.cat === "templates" ? `Шаблон: ${i.label}` : `Создать: ${i.label.toLowerCase()}`,
@@ -184,6 +186,7 @@
     flag("glow", "свечение под группами"),
     flag("snap", "прилипание"),
     flag("smartDraw", "распознавание фигур", WandSparkles),
+    flag("sound", "звуки", Volume2),
     ...BACKDROPS.map((d) => ({
       id: "bg:" + d.id,
       label: `Фон доски: ${d.label}`,
@@ -255,43 +258,7 @@
     return /[\s\-_./(«"]/.test(t[i - 1]!) ? 2 : 1;
   }
 
-  const TYPE_ICONS: Record<NodeType, Icon> = {
-    note: StickyNote,
-    text: Type,
-    code: CodeXml,
-    image: Image,
-    video: Play,
-    file: File,
-    shelf: Package,
-    link: Globe,
-    frame: Frame,
-    shape: Shapes,
-    path: Spline,
-    ink: Pencil,
-    sticker: SmilePlus,
-    table: Table2,
-    task: SquareCheck,
-    poll: Vote,
-    timer: Timer,
-    audio: Music,
-    counter: Hash,
-    dice: Dices,
-    progress: Gauge,
-    comment: MessageSquareText,
-    button: MousePointerClick,
-    switch: ToggleRight,
-    slider: SlidersHorizontal,
-    rating: Star,
-    clock: Clock,
-    countdown: Hourglass,
-    chart: ChartColumn,
-    qr: QrCode,
-    wheel: FerrisWheel,
-    status: CircleDot,
-    tracker: CalendarCheck,
-    calc: Sigma,
-    gate: Cpu,
-  };
+
 
   function textOf(v: NodeView): string {
     const p = v.props;
@@ -469,7 +436,7 @@
               <span class="kbd">{#each keyLabel(r.c.keys) as k, ki (ki)}<span>{k}</span>{/each}</span>
             {/if}
           {:else}
-            {@const TIcon = TYPE_ICONS[r.h.v.type]}
+            {@const TIcon = typeIcon(r.h.v.type)}
             {@const m = mark(r.h.sub)}
             <span class="ic"><TIcon size={16} /></span>
             <span class="text">
