@@ -370,6 +370,85 @@ export class BoardStore {
     return this.order.filter((v) => v.parent === frameId);
   }
 
+  /** Кто в какой рамке лежит напрямую: id рамки → её дети. */
+  private kidsMap(): Map<string, NodeView[]> {
+    const kids = new Map<string, NodeView[]>();
+    for (const v of this.order) {
+      if (!v.parent) continue;
+      let l = kids.get(v.parent);
+      if (!l) kids.set(v.parent, (l = []));
+      l.push(v);
+    }
+    return kids;
+  }
+
+  /** Всё содержимое рамки, в том числе во вложенных рамках. */
+  descendants(frameId: string, kids: Map<string, NodeView[]> = this.kidsMap()): NodeView[] {
+    const out: NodeView[] = [];
+    const seen = new Set<string>([frameId]);
+    const stack = [frameId];
+    while (stack.length) {
+      for (const c of kids.get(stack.pop()!) ?? []) {
+        if (seen.has(c.id)) continue;
+        seen.add(c.id);
+        out.push(c);
+        if (c.type === "frame") stack.push(c.id);
+      }
+    }
+    return out;
+  }
+
+  /** Рамки в порядке отрисовки: внешние снизу, вложенные — над ними (иначе заливка
+      большой рамки, нарисованной позже, закрыла бы маленькую). */
+  layerFrames(frames: NodeView[]): NodeView[] {
+    if (!frames.some((f) => f.parent)) return frames;
+    const d = new Map<NodeView, number>();
+    for (const f of frames) d.set(f, this.depth(f));
+    return frames
+      .map((f, i) => ({ f, i }))
+      .sort((a, c) => d.get(a.f)! - d.get(c.f)! || a.i - c.i)
+      .map((x) => x.f);
+  }
+
+  /** Глубина вложенности рамки: 0 — верхняя. */
+  depth(v: NodeView): number {
+    let d = 0;
+    const seen = new Set<string>([v.id]);
+    for (let p = v.parent; p && !seen.has(p) && d < 32; d++) {
+      seen.add(p);
+      const f = this.views.get(p);
+      if (!f) break;
+      p = f.parent;
+    }
+    return d;
+  }
+
+  /** Рамка для прямоугольника r: обычный узел попадает в рамку центром, рамка — только
+      целиком и только в рамку больше себя. Из подходящих — самая тесная (вложенная). */
+  containerOf(r: Rect, isFrame: boolean, skip?: ReadonlySet<string>, frames: readonly NodeView[] = this.order): NodeView | undefined {
+    const cx = r.x + r.w / 2;
+    const cy = r.y + r.h / 2;
+    let best: NodeView | undefined;
+    let bestA = Infinity;
+    for (const f of frames) {
+      if (f.type !== "frame" || skip?.has(f.id)) continue;
+      const fx = f.x;
+      const fy = f.y;
+      const fw = f.w;
+      const fh = f.H;
+      const a = fw * fh;
+      if (isFrame) {
+        if (a <= r.w * r.h || r.x < fx || r.y < fy || r.x + r.w > fx + fw || r.y + r.h > fy + fh) continue;
+      } else if (cx < fx || cy < fy || cx > fx + fw || cy > fy + fh) continue;
+      // при равной площади — верхняя
+      if (a <= bestA) {
+        best = f;
+        bestA = a;
+      }
+    }
+    return best;
+  }
+
   /** Опорные точки линии (концы — с учётом привязок к узлам). */
   pathPoints(v: NodeView): Pt[] {
     return this.connector(v).ctrl;
@@ -455,13 +534,9 @@ export class BoardStore {
     return undefined;
   }
 
+  /** Самая тесная рамка под точкой. */
   frameAt(p: Pt, exclude: ReadonlySet<string>): NodeView | undefined {
-    for (let i = this.order.length - 1; i >= 0; i--) {
-      const v = this.order[i]!;
-      if (v.type !== "frame" || exclude.has(v.id)) continue;
-      if (containsPt(v.rect, p)) return v;
-    }
-    return undefined;
+    return this.containerOf({ x: p.x, y: p.y, w: 0, h: 0 }, false, exclude);
   }
 
   /* ------------------------------- запись ------------------------------- */
@@ -487,6 +562,11 @@ export class BoardStore {
   }
 
   createWithId(id: string, data: NodeData, origin: unknown = LOCAL) {
+    // рамку не указали — новый узел ложится в ту, где оказался (как при перетаскивании)
+    if (!data.parent && Number.isFinite(data.x) && Number.isFinite(data.y)) {
+      const f = this.containerOf({ x: data.x, y: data.y, w: data.w || 0, h: data.h || 0 }, data.type === "frame");
+      if (f) data = { ...data, parent: f.id };
+    }
     this.transact(() => {
       const m = new Y.Map<unknown>();
       for (const [k, v] of Object.entries(data)) {
@@ -549,7 +629,7 @@ export class BoardStore {
     if (withChildren) {
       for (const id of [...drop]) {
         const v = this.views.get(id);
-        if (v?.type === "frame") for (const c of this.children(id)) drop.add(c.id);
+        if (v?.type === "frame") for (const c of this.descendants(id)) drop.add(c.id);
       }
     }
     this.transact(() => {
@@ -571,7 +651,14 @@ export class BoardStore {
         // рамка удалена без содержимого — дети остаются без родителя
       }
       if (!withChildren) {
-        for (const v of this.order) if (v.parent && drop.has(v.parent)) this.nodes.get(v.id)?.delete("parent");
+        // содержимое переходит в рамку уровнем выше (или остаётся без рамки)
+        for (const v of this.order) {
+          if (!v.parent || !drop.has(v.parent) || drop.has(v.id)) continue;
+          let up = this.views.get(v.parent)?.parent;
+          for (let i = 0; up && drop.has(up) && i < 32; i++) up = this.views.get(up)?.parent;
+          if (up) this.nodes.get(v.id)?.set("parent", up);
+          else this.nodes.get(v.id)?.delete("parent");
+        }
       }
     });
     this.selection.remove(drop);
@@ -684,16 +771,25 @@ export class BoardStore {
     this.transact(() => moving.forEach((v, i) => this.nodes.get(v.id)?.set("z", keys[i]!)));
   }
 
-  /** Привязать узлы к рамкам, в которые попал их центр. */
-  reparent(ids: Iterable<string>) {
+  /** Разложить узлы по рамкам: обычный узел — в рамку, куда попал его центр, рамка — в ту,
+      что вмещает её целиком; из подходящих — самая тесная. moving — что двигали вместе:
+      если рамка узла ехала вместе с ним, он в ней и остаётся (взаимное положение то же). */
+  reparent(ids: Iterable<string>, moving?: ReadonlySet<string>) {
     const list = [...ids];
-    const moving = new Set(list);
+    if (!list.length) return;
+    const frames = this.order.filter((f) => f.type === "frame");
+    let kids: Map<string, NodeView[]> | null = null;
     this.transact(() => {
       for (const id of list) {
         const v = this.views.get(id);
-        if (!v || v.type === "frame") continue;
-        const frame = this.frameAt(center(this.bounds(v)), moving);
-        const next = frame?.id;
+        if (!v) continue;
+        if (v.parent && moving?.has(v.parent) && this.views.get(v.parent)?.type === "frame") continue;
+        let skip: Set<string> | undefined;
+        if (v.type === "frame") {
+          kids ??= this.kidsMap();
+          skip = new Set([v.id, ...this.descendants(v.id, kids).map((d) => d.id)]);
+        }
+        const next = this.containerOf(this.bounds(v), v.type === "frame", skip, frames)?.id;
         if (next !== v.parent) {
           const m = this.nodes.get(id);
           if (next) m?.set("parent", next);

@@ -46,7 +46,11 @@
         onclick={(e) => pick(e, i)}
       >
         <span class="rt-base"><Icon size={size} strokeWidth={1.8} /></span>
-        <span class="rt-on" style:clip-path="inset(0 {100 - f * 100}% 0 0)"><Icon size={size} strokeWidth={1.8} fill="currentColor" /></span>
+        {#if f > 0}
+          <!-- clip-path режет и свечение (drop-shadow), поэтому область обрезки шире значка:
+               целый значок не режется вовсе, у частичного — только справа по доле -->
+          <span class="rt-on" style:clip-path={f >= 1 ? null : `inset(-12px ${100 - f * 100}% -12px -12px)`}><Icon size={size} strokeWidth={1.8} fill="currentColor" /></span>
+        {/if}
       </button>
     {/each}
   </div>

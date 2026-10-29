@@ -62,7 +62,8 @@
       if (v.type === "frame") frames.push(v);
       else nodes.push(v);
     }
-    if (!same(frames, prevFrames)) prevFrames = frames;
+    const sorted = s.layerFrames(frames);
+    if (!same(sorted, prevFrames)) prevFrames = sorted;
     if (!same(nodes, prevNodes)) prevNodes = nodes;
     return { frames: prevFrames, nodes: prevNodes };
   });

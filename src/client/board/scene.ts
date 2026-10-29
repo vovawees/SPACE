@@ -220,9 +220,8 @@ export function drawScene(ctx: CanvasRenderingContext2D, s: BoardStore, view: Sc
   const px = 1 / z;
   const order = s.order;
 
-  // рамки — снизу
-  for (const v of order) {
-    if (v.type !== "frame") continue;
+  // рамки — снизу, вложенные — над внешними
+  for (const v of s.layerFrames(order.filter((f) => f.type === "frame"))) {
     if (v.props.hid && opts.readonly) continue;
     const r = v.rect;
     if (!intersects(r, world)) continue;

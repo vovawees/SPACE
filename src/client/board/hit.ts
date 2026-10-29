@@ -33,13 +33,17 @@ export function hitTest(s: BoardStore, p: Pt, tol: number, opts: { frames?: "lab
     if (hitNode(s, v, p, tol)) return v;
   }
   if (opts.frames === "none") return undefined;
+  // внутри рамки — самая тесная (вложенная), подпись — верхняя
+  if (opts.frames === "all") return s.frameAt(p, NONE);
   for (let i = order.length - 1; i >= 0; i--) {
     const v = order[i]!;
     if (v.type !== "frame") continue;
-    if (opts.frames === "all" ? containsPt(v.rect, p) : frameLabelHit(v, p, tol)) return v;
+    if (frameLabelHit(v, p, tol)) return v;
   }
   return undefined;
 }
+
+const NONE: ReadonlySet<string> = new Set();
 
 export function hitNode(s: BoardStore, v: NodeView, p: Pt, tol: number): boolean {
   if (v.type === "path") {

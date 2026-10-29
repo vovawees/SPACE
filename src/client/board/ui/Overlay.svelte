@@ -268,12 +268,12 @@
   {/if}
 
   {#if knob}
-    <div class="knob-dot" class:near={knob.near} style:transform="translate({knob.ex}px, {knob.ey}px)"></div>
+    <div class="knob-dot" class:near={knob.near} style:translate="{knob.ex}px {knob.ey}px"></div>
     <div
       class="knob"
       class:near={knob.near}
       data-handle="conn:{knob.side}:{knob.id}:{knob.u}:{knob.v}"
-      style:transform="translate({knob.x}px, {knob.y}px)"
+      style:translate="{knob.x}px {knob.y}px"
       title="Щелчок — связанный объект (Tab), перетаскивание — стрелка отсюда"
     >
       <Plus size={14} strokeWidth={2.6} />
@@ -297,7 +297,7 @@
 
   {#if anchorHint}
     {#each anchorHint.magnets as m (m.side)}
-      <div class="magnet" class:on={m.on} style:transform="translate({m.x}px, {m.y}px)"></div>
+      <div class="magnet" class:on={m.on} style:translate="{m.x}px {m.y}px"></div>
     {/each}
     {#if anchorHint.dot}
       <div class="anchor-dot" style:transform="translate({anchorHint.dot.x}px, {anchorHint.dot.y}px)"></div>
@@ -351,7 +351,7 @@
 
   {#if ix.pressRing}
     {#key ix.pressRing.n}
-      <div class="press-ring" style:transform="translate({ix.pressRing.x}px, {ix.pressRing.y}px)" aria-hidden="true"></div>
+      <div class="press-ring" style:translate="{ix.pressRing.x}px {ix.pressRing.y}px" aria-hidden="true"></div>
     {/key}
   {/if}
 
@@ -542,9 +542,10 @@
     cursor: crosshair;
     opacity: 0.42;
     scale: 0.82;
-    /* «спокойно» догоняет указатель */
+    /* «спокойно» догоняет указатель. Положение — свойством translate, а не transform:
+       scale умножал бы и сдвиг, и кнопка убегала бы от указателя. */
     transition:
-      transform 160ms cubic-bezier(0.22, 1, 0.36, 1),
+      translate 160ms cubic-bezier(0.22, 1, 0.36, 1),
       opacity 160ms var(--ease-out),
       scale 200ms var(--ease-spring);
     animation: knob-in 200ms var(--ease-out) backwards;
@@ -572,7 +573,7 @@
     box-shadow: 0 0 0 2px var(--surface-1);
     opacity: 0.35;
     transition:
-      transform 160ms cubic-bezier(0.22, 1, 0.36, 1),
+      translate 160ms cubic-bezier(0.22, 1, 0.36, 1),
       opacity 160ms var(--ease-out);
     animation: knob-in 200ms var(--ease-out) backwards;
   }
@@ -646,11 +647,11 @@
     border: 1.5px solid var(--accent);
     box-shadow: 0 1px 3px rgb(0 0 0 / 0.3);
     transition:
-      transform 90ms var(--ease-out),
+      scale 90ms var(--ease-out),
       background 90ms;
   }
   .magnet.on {
-    transform: scale(1.45);
+    scale: 1.45;
     background: var(--accent);
     border-color: #fff;
   }

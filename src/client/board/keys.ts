@@ -235,7 +235,10 @@ export function attachKeys(b: Board): () => void {
         const d = shift ? 10 : 1;
         const dx = code === "ArrowLeft" ? -d : code === "ArrowRight" ? d : 0;
         const dy = code === "ArrowUp" ? -d : code === "ArrowDown" ? d : 0;
-        const ids = withChildren(b, sel.list).filter((id) => !st.get(id)?.locked);
+        const ids = withChildren(
+          b,
+          sel.list.filter((id) => !st.get(id)?.locked),
+        );
         st.updateMany(
           ids.map((id) => {
             const v = st.get(id)!;
@@ -243,6 +246,7 @@ export function attachKeys(b: Board): () => void {
           }),
         );
         st.reflowPaths(ids);
+        st.reparent(ids, new Set(ids));
         return;
       }
       case "KeyG":

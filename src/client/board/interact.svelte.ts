@@ -734,12 +734,14 @@ export class Interact {
       duplicate(b, ids, { x: 0, y: 0 });
       ids = s.selection.list;
     }
-    const moving = withChildren(b, ids).filter((id) => !s.get(id)?.locked);
+    // содержимое рамки (и вложенных рамок) едет вместе с ней — даже закреплённое
+    const moving = withChildren(b, ids);
     const movingSet = new Set(moving);
     s.beginTransient(moving);
-    // линии, привязанные к тому, что остаётся на месте, отвязываются
+    // выделенные линии, привязанные к тому, что остаётся на месте, отвязываются;
+    // линии внутри рамки не отвязываются — тянутся за своей целью
     s.transact(() => {
-      for (const id of moving) {
+      for (const id of ids) {
         const v = s.get(id);
         if (v?.type !== "path") continue;
         const patch: Partial<NodeData> = {};
@@ -806,7 +808,7 @@ export class Interact {
           this.hot = t?.id ?? null;
         }
         const f = s.frameAt(q.w, movingSet);
-        this.hotFrame = f && !f.locked && ids.some((id) => s.get(id)?.parent !== f.id && s.get(id)?.type !== "frame") ? f.id : null;
+        this.hotFrame = f && !f.locked && ids.some((id) => s.get(id)?.parent !== f.id) ? f.id : null;
         if (q.t - lastFlush > 50) {
           lastFlush = q.t;
           s.flushTransient(moving);
@@ -826,7 +828,7 @@ export class Interact {
         }
         s.flushTransient(moving);
         s.reflowPaths(moving);
-        s.reparent(moving);
+        s.reparent(moving, movingSet);
         s.endTransient(moving);
       },
       cancel: () => {
@@ -1178,7 +1180,8 @@ export class Interact {
         s.reflowPaths([v.id]);
         if (before) {
           const area = expand({ x: Math.min(before.x, v.x), y: Math.min(before.y, v.y), w: Math.max(before.w, v.w) + Math.abs(before.x - v.x), h: Math.max(before.h, v.h) + Math.abs(before.y - v.y) }, 10);
-          s.reparent(s.order.filter((n) => n.type !== "frame" && intersects(s.bounds(n), area)).map((n) => n.id));
+          // кто оказался внутри — в рамку, кто снаружи — из неё; вложенные рамки тоже
+          s.reparent([...s.order.filter((n) => n.id !== v.id && intersects(s.bounds(n), area)).map((n) => n.id), v.id]);
         }
         s.endTransient([v.id], GEO4);
       },
@@ -1761,19 +1764,14 @@ export class Interact {
         }
         const R = { x: Math.round(rect.x), y: Math.round(rect.y), w: Math.round(Math.max(8, rect.w)), h: Math.round(Math.max(8, rect.h)) };
         let id = "";
-        s.transact(() => {
-          if (tool === "frame") {
-            id = s.create({ type: "frame", ...R, name: frameName(b) });
-            for (const v of s.order) {
-              if (v.id === id || v.type === "frame") continue;
-              const vb = s.bounds(v);
-              if (vb.x >= R.x && vb.y >= R.y && vb.x + vb.w <= R.x + R.w && vb.y + vb.h <= R.y + R.h) s.update(v.id, { parent: id });
-            }
-          } else {
-            id = s.create({ type: "shape", ...R, kind: b.shapeKind, fill: b.style.fill, stroke: b.style.stroke, dash: b.style.dash, color: b.style.color });
-            s.reparent([id]);
-          }
-        });
+        if (tool === "frame") {
+          id = s.create({ type: "frame", ...R, name: frameName(b) });
+          // всё, что внутри, — в новую рамку (вложенные рамки — вместе с содержимым);
+          // уже после записи, когда рамка появилась в store
+          s.reparent(s.order.filter((v) => v.id !== id && intersects(s.bounds(v), R)).map((v) => v.id));
+        } else {
+          id = s.create({ type: "shape", ...R, kind: b.shapeKind, fill: b.style.fill, stroke: b.style.stroke, dash: b.style.dash, color: b.style.color });
+        }
         s.selection.set([id]);
         b.doneCreating();
       },

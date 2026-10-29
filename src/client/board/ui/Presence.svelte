@@ -76,7 +76,7 @@
   {/each}
 
   {#if me}
-    <div class="say" style:transform="translate({me.x + 14}px, {me.y + 16}px)" style:--pc={b.me.color}>
+    <div class="say" style:translate="{me.x + 14}px {me.y + 16}px" style:--pc={b.me.color}>
       <input
         data-ui
         value={so.say}

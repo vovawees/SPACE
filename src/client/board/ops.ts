@@ -40,7 +40,7 @@ export function withChildren(b: Board, ids: Iterable<string>, s: BoardStore = b.
   for (const id of ids) {
     out.add(id);
     const v = s.get(id);
-    if (v?.type === "frame") for (const c of s.children(id)) out.add(c.id);
+    if (v?.type === "frame") for (const c of s.descendants(id)) out.add(c.id);
   }
   return [...out];
 }
@@ -88,8 +88,9 @@ export function insertClip(b: Board, clip: Clip, opts: { at?: Pt; offset?: Pt } 
         if (v) b.store.update(v.id, b.store.pathPatchOf(v));
       }
     });
-    b.store.reparent(newIds.filter((id, i) => !list[i]!.parent && id));
   });
+  // уже после записи: узлы без своей рамки ложатся в ту, куда попали
+  b.store.reparent(newIds.filter((id, i) => !list[i]!.parent && id));
   b.store.selection.set(newIds.filter((_, i) => !list[i]!.parent || !ids.has(clip.nodes[i]!.parent!)));
   return newIds;
 }
@@ -177,7 +178,7 @@ export function tidy(b: Board, ids: string[]) {
 function moveWithChildren(b: Board, v: NodeView, dx: number, dy: number) {
   b.store.update(v.id, { x: Math.round(v.x + dx), y: Math.round(v.y + dy) });
   if (v.type === "frame") {
-    for (const c of b.store.children(v.id)) b.store.update(c.id, { x: Math.round(c.x + dx), y: Math.round(c.y + dy) });
+    for (const c of b.store.descendants(v.id)) b.store.update(c.id, { x: Math.round(c.x + dx), y: Math.round(c.y + dy) });
   }
 }
 
@@ -199,7 +200,7 @@ export function wrapInFrame(b: Board, ids: string[]): string | null {
       name: "Рамка",
       z: undefined,
     });
-    for (const v of views) if (v.type !== "frame") b.store.update(v.id, { parent: frameId });
+    for (const v of views) b.store.update(v.id, { parent: frameId });
   });
   b.store.selection.set([frameId]);
   return frameId;

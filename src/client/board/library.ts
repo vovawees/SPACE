@@ -90,7 +90,7 @@ export const EMOJI_GROUPS: { name: string; list: string[] }[] = [
   { name: "Животные", list: ["🐶", "🐱", "🦊", "🐻", "🐼", "🐨", "🐯", "🦁", "🐸", "🐵", "🐧", "🦄", "🐝", "🦋", "🐢", "🐙", "🦖", "🐳", "🦉", "🐌", "🦀", "🐞", "🐺", "🦥"] },
   { name: "Природа", list: ["☀️", "🌙", "🌟", "☁️", "🌈", "⚡", "❄️", "🌊", "🌸", "🌻", "🌲", "🍀", "🍁", "🌵", "💧", "🌍"] },
   { name: "Символы", list: ["➡️", "⬅️", "⬆️", "⬇️", "↔️", "🔁", "➕", "➖", "✖️", "➗", "💲", "♻️", "⚙️", "🔔", "🔑", "🏷️", "📍", "🎵", "✔️", "🔺", "🔻", "💠", "🔶", "🔷"] },
-  { name: "Флаги", list: ["🏳️", "🏴", "🚩", "🏁", "🏳️‍🌈", "🇷🇺", "🇺🇦", "🇧🇾", "🇰🇿", "🇺🇸", "🇬🇧", "🇩🇪", "🇫🇷", "🇯🇵", "🇨🇳", "🇪🇺"] },
+  { name: "Флаги", list: ["🏳️", "🏴", "🚩", "🏴‍☠️", "🏳️‍🌈", "🇷🇺", "🇺🇦", "🇧🇾", "🇰🇿", "🇺🇸", "🇬🇧", "🇩🇪", "🇫🇷", "🇯🇵", "🇨🇳", "🇪🇺"] },
 ];
 
 const BASIC: LibItem[] = [
@@ -151,7 +151,12 @@ const GAMES: LibItem[] = [
 
 const SHAPES: LibItem[] = SHAPE_KINDS.map((k) => ({ id: `shape:${k}`, cat: "shapes" as const, label: SHAPE_LABELS[k], words: "фигура блок-схема", svg: shapeGlyph(k, 26, 1.6) }));
 
-const STICKERS: LibItem[] = EMOJI_GROUPS.flatMap((g) => g.list.map((e) => ({ id: `sticker:${e}`, cat: "stickers" as const, label: e, words: g.name.toLowerCase(), emoji: e })));
+/* Эмодзи, попавший в две группы, показывается в первой: ключи списка должны быть
+   разными, иначе Svelte не отрисует раздел целиком. */
+const seenEmoji = new Set<string>();
+const STICKERS: LibItem[] = EMOJI_GROUPS.flatMap((g) =>
+  g.list.filter((e) => !seenEmoji.has(e) && !!seenEmoji.add(e)).map((e) => ({ id: `sticker:${e}`, cat: "stickers" as const, label: e, words: g.name.toLowerCase(), emoji: e, group: g.name })),
+);
 
 const TPL: LibItem[] = TEMPLATES.map((t) => ({ id: `tpl:${t.id}`, cat: "templates" as const, label: t.label, desc: t.desc, words: `${t.words} ${t.group.toLowerCase()}`, group: t.group, svg: templateThumb(t.build()) }));
 

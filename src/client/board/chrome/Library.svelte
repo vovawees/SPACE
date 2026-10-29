@@ -155,7 +155,7 @@
     {#each EMOJI_GROUPS as g (g.name)}
       <div class="lib-head">{g.name}</div>
       <div class="lib-grid stickers">
-        {#each items.filter((i) => g.list.includes(i.emoji ?? "")) as it (it.id)}{@render tile(it)}{/each}
+        {#each items.filter((i) => i.group === g.name) as it (it.id)}{@render tile(it)}{/each}
       </div>
     {/each}
   {:else if c === "templates" && !q.trim()}
