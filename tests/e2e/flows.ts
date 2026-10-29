@@ -1,7 +1,8 @@
 /* Функциональные сценарии в настоящем браузере (Playwright + Chromium):
    правка, перетаскивание и отмена, стрелки с привязкой, загрузка картинки,
    совместная работа двух людей, история версий, доступ «только просмотр»,
-   жесты на телефоне, вложенные рамки, кнопка «+» у края.
+   смена доступа без потери связи, жесты на телефоне, вложенные рамки,
+   кнопка «+» у края, виджеты разработки и дизайна, шрифты и начертание.
    node tests/e2e/flows.ts http://localhost:8787 */
 import fs from "node:fs";
 import { execFileSync } from "node:child_process";
@@ -258,6 +259,11 @@ try {
   const M = await person(browser, "Миша", "#c86bfa", true);
   const mp = M.page;
   await api(a, "PATCH", `/api/boards/${board.id}`, { linkAccess: "edit" });
+  // смена доступа переподключает всех — правки снова ходят в обе стороны
+  const afterKick = (await a.evaluate(() => (window as any).__board.store.create({ type: "note", x: 3000, y: 3000, w: 120, h: 80, text: "после смены доступа" }))) as string;
+  ok((await until(() => nodes(bp), (l) => l.some((n) => n.id === afterKick), 6000)).some((n) => n.id === afterKick), "после смены доступа правки доходят до всех");
+  await bp.evaluate(() => (window as any).__board.store.create({ type: "note", x: 3200, y: 3000, w: 120, h: 80, text: "и обратно" }));
+  ok((await until(() => nodes(a), (l) => l.some((n) => n.text === "и обратно"), 6000)).some((n) => n.text === "и обратно"), "и обратно — от второго участника");
   await openBoard(mp, board.id);
   const cdp = await M.ctx.newCDPSession(mp);
   const touch = (type: string, pts: { x: number; y: number }[]) =>
@@ -338,6 +344,121 @@ try {
     const after = await until(() => nodes(a), (ns) => ns.length > n0, 2500);
     ok(after.length > n0 && after.some((n) => n.type === "path"), "щелчок по «+» создаёт связанный объект", `${n0} → ${after.length}`);
   }
+
+  console.log("Разработка и дизайн");
+  await api(a, "PATCH", `/api/boards/${board2.id}`, { linkAccess: "edit" });
+  await openBoard(bp, board2.id);
+  await a.evaluate(() => {
+    const b = (window as any).__board;
+    b.store.selection.clear();
+    b.view.remove([...b.store.views.keys()]);
+    b.camera.set(0, 0, 1);
+  });
+  await sleep(300);
+  const rail = a.locator('.lib-rail button[aria-label="Разработка и дизайн"]');
+  const focusOn = (id: string) =>
+    a.evaluate((id) => {
+      const b = (window as any).__board;
+      const v = b.store.get(id);
+      b.store.selection.clear();
+      b.camera.fit({ x: v.x, y: v.y, w: v.w, h: v.h }, { pad: 160, maxZoom: 1 });
+    }, id);
+  async function insert(label: string, type: string): Promise<N | undefined> {
+    const tile = a.locator(`.lib-tile[aria-label="${label}"]`);
+    if (!(await tile.count())) await rail.click();
+    await tile.first().click();
+    const ns = await until(() => nodes(a), (l) => l.some((n) => n.type === type), 3000);
+    if (await tile.count()) await rail.click();
+    await sleep(200);
+    const n = ns.find((x) => x.type === type);
+    if (n) await focusOn(n.id);
+    await sleep(400);
+    return n;
+  }
+  const propsOf = (id: string) => a.evaluate((id) => JSON.parse(JSON.stringify((window as any).__board.store.get(id).props)), id) as Promise<Record<string, any>>;
+  const cardsIn = (pr: Record<string, any>) => Object.entries(pr).filter(([k]) => k.startsWith("kc:")).map(([k, x]) => ({ id: k.slice(3), col: x.col as string }));
+
+  const kb = await insert("Канбан", "kanban");
+  ok(!!kb && cardsIn(kb.props).length > 0, "канбан из библиотеки — с карточками", String(kb && cardsIn(kb.props).length));
+  if (kb) {
+    const first = cardsIn(kb.props)[0]!;
+    const item = await center(a, `.node[data-id="${kb.id}"] .kb-item[data-card="${first.id}"]`);
+    const cols = a.locator(`.node[data-id="${kb.id}"] .kb-col`);
+    const last = (await cols.last().boundingBox())!;
+    const lastId = await cols.last().getAttribute("data-col");
+    await drag(a, item, { x: last.x + last.width / 2, y: last.y + last.height / 2 }, 14);
+    const pr = await until(() => propsOf(kb.id), (x) => x[`kc:${first.id}`]?.col === lastId, 2500);
+    ok(pr[`kc:${first.id}`]?.col === lastId, "карточку перетащили в последнюю колонку", `${first.col} → ${pr[`kc:${first.id}`]?.col}`);
+  }
+
+  const lt = await insert("Таблица добычи", "loot");
+  ok(!!lt, "таблица добычи вставлена");
+  if (lt) {
+    await a.locator(`.node[data-id="${lt.id}"] .lt-roll`).click();
+    const pr = await until(() => propsOf(lt.id), (x) => Array.isArray(x.drop?.i) && x.drop.i.length > 0, 5000);
+    ok(Array.isArray(pr.drop?.i) && pr.drop.i.length > 0, "«Открыть» — выпадает предмет", JSON.stringify(pr.drop?.i));
+    ok(await until(() => a.locator(`.node[data-id="${lt.id}"] .lt-res`).textContent(), (t) => !!t?.includes("Выпало"), 3000).then((t) => !!t?.includes("Выпало")), "результат показан на виджете");
+  }
+
+  const pk = await insert("Покер планирования", "estimate");
+  ok(!!pk, "покер планирования вставлен");
+  if (pk) {
+    const pick = a.locator(`.node[data-id="${pk.id}"] .pk-pick`).nth(3);
+    const face = (await pick.textContent())?.trim();
+    await pick.click();
+    await until(() => a.locator(`.node[data-id="${pk.id}"] .pk-seat.me`).count(), (n) => n > 0, 2500);
+    ok((await a.locator(`.node[data-id="${pk.id}"] .pk-seat.me .pk-face`).textContent()) === "", "голос скрыт до открытия");
+    await a.locator(`.node[data-id="${pk.id}"] .pk-act.primary`).click();
+    const shown = await until(() => a.locator(`.node[data-id="${pk.id}"] .pk-seat.me .pk-face`).textContent(), (t) => !!t, 2500);
+    ok(shown?.trim() === face, "«Открыть карты» показывает оценку", `${face} / ${shown}`);
+    const bpk = await until(() => bp.evaluate((id) => !!(window as any).__board.store.get(id)?.props.on, pk.id), (x) => x, 3000);
+    ok(bpk, "открытие видит и второй участник");
+  }
+
+  const tm = await insert("Карта уровня", "tilemap");
+  ok(!!tm, "карта уровня вставлена");
+  if (tm) {
+    await a.evaluate((id) => (window as any).__board.store.selection.set([id]), tm.id);
+    await sleep(300);
+    const before = JSON.stringify(await propsOf(tm.id));
+    const map = (await a.locator(`.node[data-id="${tm.id}"] .tm-map`).boundingBox())!;
+    await a.locator(`.node[data-id="${tm.id}"] .tm-tile`).nth(1).click();
+    await a.mouse.move(map.x + 8, map.y + 8);
+    await a.mouse.down();
+    await a.mouse.move(map.x + map.width * 0.3, map.y + 8, { steps: 6 });
+    await a.mouse.up();
+    const after = await until(async () => JSON.stringify(await propsOf(tm.id)), (x) => x !== before, 2500);
+    ok(after !== before, "кистью по карте — клетки закрашиваются");
+  }
+
+  console.log("Шрифты и начертание");
+  const tid = await a.evaluate(() => {
+    const b = (window as any).__board;
+    const id = b.store.create({ type: "note", x: 0, y: 0, w: 240, h: 120, text: "Начертание" });
+    b.store.selection.set([id]);
+    b.camera.fit({ x: 0, y: 0, w: 240, h: 120 }, { pad: 200, maxZoom: 1 });
+    return id as string;
+  });
+  await sleep(300);
+  await a.keyboard.press("Control+b");
+  await a.keyboard.press("Control+i");
+  await sleep(200);
+  let tp = await propsOf(tid);
+  ok(tp.tw === "bold" && tp.ti === true, "Ctrl+B и Ctrl+I — жирный и курсив", JSON.stringify({ tw: tp.tw, ti: tp.ti }));
+  const cls = (await a.locator(`.node[data-id="${tid}"]`).getAttribute("class")) ?? "";
+  ok(cls.includes("tw-bold") && cls.includes("ti"), "классы начертания на объекте");
+  const fw = await a.locator(`.node[data-id="${tid}"] .note-body`).evaluate((el) => getComputedStyle(el).fontWeight);
+  ok(Number(fw) >= 700, "текст действительно жирный", fw);
+  await a.evaluate(() => (window as any).__board.store.setFont("round"));
+  const bf = await until(() => bp.evaluate(() => (window as any).__board.store.font), (x) => x === "round", 3000);
+  ok(bf === "round", "шрифт доски виден второму участнику");
+  const fam = await a.locator(`.node[data-id="${tid}"] .note-body`).evaluate((el) => getComputedStyle(el).fontFamily);
+  ok(fam.includes("Nunito"), "объект без своего шрифта берёт шрифт доски", fam.slice(0, 40));
+  await a.evaluate((id) => (window as any).__board.store.update(id, { font: "sans" }), tid);
+  await sleep(150);
+  const fam2 = await a.locator(`.node[data-id="${tid}"] .note-body`).evaluate((el) => getComputedStyle(el).fontFamily);
+  ok(!fam2.includes("Nunito"), "свой «Обычный» шрифт важнее шрифта доски", fam2.slice(0, 40));
+  await a.evaluate(() => (window as any).__board.store.setFont("sans"));
   await B.ctx.close();
   await A.ctx.close();
 } catch (e) {

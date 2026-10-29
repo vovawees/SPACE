@@ -80,6 +80,12 @@ export class Watchdog {
     else this.restart();
   }
 
+  /** Сервер закрыл документ, а сокет оставил открытым — переподключиться целиком. */
+  reset() {
+    if (this.blocked() || this.ws.status !== Connected) return;
+    this.force();
+  }
+
   /** Вернулись на вкладку или коснулись экрана. */
   private wake() {
     if (this.blocked()) return;

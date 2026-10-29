@@ -8,6 +8,7 @@ import { SvelteSet } from "svelte/reactivity";
 import { IndexeddbPersistence } from "y-indexeddb";
 import * as Y from "yjs";
 import type { BoardPerms, BoardSummary, Role, UserRef } from "../../shared/types.ts";
+import { api } from "../lib/api.ts";
 import { session } from "../lib/session.svelte.ts";
 import { Camera } from "./camera.svelte.ts";
 import type { Pt, Rect } from "./geometry.ts";
@@ -194,6 +195,8 @@ export class Board {
   /** Перезапуск зависшей связи. */
   private readonly net: Watchdog;
   private closed = false;
+  /** Уже подключались: следующие входы — переподключения. */
+  private authed = false;
 
   constructor(id: string) {
     this.id = id;
@@ -221,7 +224,12 @@ export class Board {
       onSynced: () => (this.synced = true),
       onAuthenticated: ({ scope }) => {
         if (scope === "readonly") this.perms = { ...this.perms, edit: false };
+        // переподключение после смены доступа — роль и права заново с сервера
+        if (this.authed) void this.refreshAccess(scope === "readonly");
+        this.authed = true;
       },
+      // сервер закрыл документ, не закрыв сокет: без переподключения правки не ходят
+      onClose: () => queueMicrotask(() => this.net?.reset()),
       onAuthenticationFailed: ({ reason }) => (this.denied = reason),
       onUnsyncedChanges: ({ number }) => (this.unsynced = number),
       onAwarenessChange: () => this.readPeers(),
@@ -269,6 +277,19 @@ export class Board {
         if (peer.view) this.camera.fit(peer.view, { pad: 0, insetTop: 0, insetBottom: 0, maxZoom: 8, animate: false });
       });
     });
+  }
+
+  /** Роль и права с сервера: после переподключения доступ мог смениться. */
+  private async refreshAccess(ro: boolean) {
+    try {
+      const s = await api.get<BoardSummary>(`/api/boards/${this.id}`);
+      if (this.closed) return;
+      this.summary = s;
+      this.role = s.role;
+      if (s.perms) this.perms = ro ? { ...s.perms, edit: false } : s.perms;
+    } catch {
+      /* нет ответа — права прежние, сервер всё равно проверяет каждую правку */
+    }
   }
 
   get me(): UserRef {

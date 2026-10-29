@@ -4,7 +4,7 @@
    подключении по куке сессии; зритель получает соединение только для чтения
    (сервер сам отбрасывает его правки). Состояние хранится в SQLite целиком
    (Y.encodeStateAsUpdate) с небольшой задержкой после правок. */
-import { Hocuspocus } from "@hocuspocus/server";
+import { Hocuspocus, type Connection } from "@hocuspocus/server";
 import * as Y from "yjs";
 import { docTitle, nodesOf } from "../shared/doc.ts";
 import type { Role, UserRef } from "../shared/types.ts";
@@ -110,15 +110,29 @@ export async function editDoc(boardId: string, user: UserRef, fn: (doc: Y.Doc) =
   }
 }
 
+/** Разорвать соединение целиком. Одно закрытие документа (closeConnections)
+    оставляет сокет открытым: клиент считает себя на связи, но правки больше
+    не ходят ни туда, ни обратно. С закрытым сокетом клиент сам
+    переподключается и заново проходит проверку прав. */
+function drop(conn: Connection): void {
+  conn.close();
+  const ws = (conn as unknown as { webSocket?: { close(code?: number, reason?: string): void } }).webSocket;
+  try {
+    ws?.close(4205, "Reset Connection");
+  } catch {
+    /* сокет уже закрыт */
+  }
+}
+
 export function kickAll(boardId: string): void {
-  hocuspocus.closeConnections(boardId);
+  hocuspocus.documents.get(boardId)?.getConnections().forEach(drop);
 }
 
 /** Отключить человека от всех досок (заблокирован или сменился ранг). */
 export function kickUser(userId: string): void {
   for (const doc of hocuspocus.documents.values()) {
     doc.getConnections().forEach((conn) => {
-      if ((conn.context as CollabContext | undefined)?.user?.id === userId) conn.close();
+      if ((conn.context as CollabContext | undefined)?.user?.id === userId) drop(conn);
     });
   }
 }
