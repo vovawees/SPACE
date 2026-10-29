@@ -459,6 +459,44 @@ try {
   const fam2 = await a.locator(`.node[data-id="${tid}"] .note-body`).evaluate((el) => getComputedStyle(el).fontFamily);
   ok(!fam2.includes("Nunito"), "свой «Обычный» шрифт важнее шрифта доски", fam2.slice(0, 40));
   await a.evaluate(() => (window as any).__board.store.setFont("sans"));
+
+  // свечение под группой: масштаб его не пересчитывает, а за карточкой оно идёт
+  const gid = (await a.evaluate(() => {
+    const b = (window as any).__board;
+    const ids = [0, 1, 2].map((i) => b.store.create({ type: "note", x: 40000 + i * 230, y: 40000, w: 200, h: 120, color: "yellow" }));
+    b.camera.fit({ x: 39900, y: 39800, w: 900, h: 500 }, { pad: 40, maxZoom: 1, animate: false });
+    return ids[2];
+  })) as string;
+  const tiles = await until(() => a.evaluate(() => document.querySelectorAll(".glow-tile").length), (n) => n > 0, 4000);
+  ok(tiles > 0, "свечение под группой — плитками", String(tiles));
+  await sleep(600);
+  await a.evaluate(() => {
+    const w = window as any;
+    w.__glowPuts = 0;
+    const orig = CanvasRenderingContext2D.prototype.putImageData;
+    CanvasRenderingContext2D.prototype.putImageData = function (this: CanvasRenderingContext2D, ...args: any[]) {
+      if (this.canvas.classList.contains("glow-tile")) w.__glowPuts++;
+      return (orig as any).apply(this, args);
+    } as any;
+  });
+  const vp = a.viewportSize() ?? { width: 1280, height: 800 };
+  await a.mouse.move(vp.width / 2, vp.height / 2);
+  const zs: number[] = [];
+  for (const dy of [60, -60, 60, -60]) {
+    await a.keyboard.down("Control");
+    for (let i = 0; i < 6; i++) {
+      await a.mouse.wheel(0, dy);
+      await sleep(30);
+    }
+    await a.keyboard.up("Control");
+    await sleep(400);
+    zs.push(await a.evaluate(() => Math.round((window as any).__board.camera.z * 100)));
+  }
+  const zoomPuts = await a.evaluate(() => (window as any).__glowPuts as number);
+  ok(zoomPuts === 0 && Math.min(...zs) < Math.max(...zs), "масштаб не пересчитывает свечение", `${zoomPuts}, масштаб ${zs.join("/")}%`);
+  await a.evaluate((id) => (window as any).__board.store.update(id, { x: 40000 + 230 * 2 + 160 }), gid);
+  const movePuts = await until(() => a.evaluate(() => (window as any).__glowPuts as number), (n) => n > 0, 3000);
+  ok(movePuts > 0, "сдвиг карточки пересчитывает свечение рядом", String(movePuts));
   await B.ctx.close();
   await A.ctx.close();
 } catch (e) {

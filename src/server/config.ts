@@ -35,7 +35,7 @@ export const config = {
   trustProxy: flag(env.TRUST_PROXY),
   githubToken: (env.GITHUB_TOKEN || "").trim(),
   distDir: fromRoot(env.DIST_DIR || "dist"),
-  version: "1.3.0",
+  version: "1.3.1",
 };
 
 export type Config = typeof config;

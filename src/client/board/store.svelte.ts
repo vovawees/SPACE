@@ -294,10 +294,14 @@ export class BoardStore {
   geoRev = $state(0);
   /** Узлы, которые сейчас тащат с этого устройства. */
   readonly transients = new Set<NodeView>();
+  /** Подписчики на габариты узлов (свечение): узел появился, изменился или
+      исчез (gone). Зовутся сразу и часто — внутри только пометить. */
+  readonly geoWatch = new Set<(v: NodeView, gone: boolean) => void>();
 
   private geoTimer: ReturnType<typeof setTimeout> | undefined;
   private markGeo = (v: NodeView) => {
     this.spatial.mark(v);
+    if (this.geoWatch.size) for (const f of this.geoWatch) f(v, false);
     // линии, привязанные к узлу, едут вместе с ним
     const bound = this.bindings.get(v.id);
     if (bound) for (const id of bound) {
@@ -378,6 +382,7 @@ export class BoardStore {
     v.onGeo = null;
     this.spatial.delete(v);
     this.transients.delete(v);
+    if (this.geoWatch.size) for (const f of this.geoWatch) f(v, true);
     const bound = this.bindings.get(id);
     if (bound) for (const pid of bound) {
       const p = this.views.get(pid);

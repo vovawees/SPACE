@@ -248,8 +248,9 @@
     class:multi={s.selection.size > 1}
     style:transform="translate3d({cam.x}px,{cam.y}px,0) scale({cam.z})"
   >
-    {#if session.settings.glow && !far}
-      <Glow />
+    {#if session.settings.glow}
+      <!-- на дальнем плане свечение только прячется: готовые плитки остаются -->
+      <Glow hidden={far} />
     {/if}
     <!-- подписи рамок держат экранный размер: --iz только этому слою -->
     <div class="layer frames" style:--iz={b.iz}>

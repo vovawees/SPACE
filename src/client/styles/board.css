@@ -90,7 +90,8 @@
 }
 
 .scene-canvas,
-.glow-canvas {
+.glow-tiles,
+.glow-tile {
   position: absolute;
   left: 0;
   top: 0;
