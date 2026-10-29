@@ -1,7 +1,7 @@
 /* Функциональные сценарии в настоящем браузере (Playwright + Chromium):
    правка, перетаскивание и отмена, стрелки с привязкой, загрузка картинки,
    совместная работа двух людей, история версий, доступ «только просмотр»,
-   жесты на телефоне.
+   жесты на телефоне, вложенные рамки, кнопка «+» у края.
    node tests/e2e/flows.ts http://localhost:8787 */
 import fs from "node:fs";
 import { execFileSync } from "node:child_process";
@@ -278,6 +278,66 @@ try {
   ok(c3.z > c2m.z * 1.3, "щипок приближает", `${c2m.z.toFixed(2)} → ${c3.z.toFixed(2)}`);
   ok((await mp.locator(".tools .tool").count()) <= 8, "компактная панель инструментов", String(await mp.locator(".tools .tool").count()));
   await M.ctx.close();
+
+  console.log("Вложенные рамки");
+  const board2 = (await api(a, "POST", "/api/boards", { title: "Рамки" })) as { id: string };
+  await openBoard(a, board2.id);
+  const fr = await a.evaluate(() => {
+    const b = (window as any).__board;
+    const s = b.store;
+    b.camera.set(0, 0, 1);
+    const fa = s.create({ type: "frame", x: 100, y: 120, w: 760, h: 560, name: "Внешняя" });
+    const fb = s.create({ type: "frame", x: 140, y: 200, w: 380, h: 300, name: "Внутренняя" });
+    const n1 = s.create({ type: "note", x: 180, y: 260, w: 200, h: 100, text: "в ней" });
+    const n2 = s.create({ type: "note", x: 600, y: 260, w: 200, h: 100, text: "во внешней" });
+    return { fa, fb, n1, n2 };
+  });
+  const geo = () =>
+    a.evaluate((ids) => {
+      const s = (window as any).__board.store;
+      const out: Record<string, { x: number; y: number; parent: string | null }> = {};
+      for (const [k, id] of Object.entries(ids)) {
+        const v = s.get(id);
+        out[k] = { x: v.x, y: v.y, parent: v.parent ?? null };
+      }
+      return out;
+    }, fr);
+  const g0 = await geo();
+  ok(g0.fb!.parent === fr.fa && g0.n1!.parent === fr.fb && g0.n2!.parent === fr.fa, "вложенность определилась сама");
+  await sleep(300);
+  const lab = await center(a, `[data-frame-label="${fr.fa}"]`);
+  await drag(a, lab, { x: lab.x + 150, y: lab.y + 90 }, 12);
+  await sleep(300);
+  const g1 = await geo();
+  const fdx = g1.fa!.x - g0.fa!.x;
+  const fdy = g1.fa!.y - g0.fa!.y;
+  ok(Math.abs(fdx - 150) < 4 && Math.abs(fdy - 90) < 4, "рамку тащат за подпись", `${fdx.toFixed(0)}, ${fdy.toFixed(0)}`);
+  const kept = ["fb", "n1", "n2"].every((k) => Math.abs(g1[k]!.x - g0[k]!.x - fdx) < 0.6 && Math.abs(g1[k]!.y - g0[k]!.y - fdy) < 0.6);
+  ok(kept, "вложенная рамка и заметки едут вместе с внешней");
+  ok(g1.fb!.parent === fr.fa && g1.n1!.parent === fr.fb && g1.n2!.parent === fr.fa, "после переноса вложенность та же");
+
+  console.log("Кнопка «+» у края");
+  await a.evaluate((id) => (window as any).__board.store.selection.set([id]), fr.n2);
+  await sleep(250);
+  const nr = (await a.locator(`.node[data-id="${fr.n2}"]`).boundingBox())!;
+  for (let i = 0; i <= 10; i++) {
+    await a.mouse.move(nr.x + nr.width - 40 + i * 4, nr.y + nr.height / 2 + 20);
+    await sleep(16);
+  }
+  const knob = await until(() => a.locator(".knob").boundingBox().catch(() => null), (k) => !!k, 2500);
+  ok(!!knob, "у края выделенного появляется «+»");
+  if (knob) {
+    const n0 = (await nodes(a)).length;
+    const kx = knob.x + knob.width / 2;
+    const ky = knob.y + knob.height / 2;
+    await a.mouse.move(kx, ky, { steps: 8 });
+    await sleep(200);
+    await a.mouse.down();
+    await sleep(50);
+    await a.mouse.up();
+    const after = await until(() => nodes(a), (ns) => ns.length > n0, 2500);
+    ok(after.length > n0 && after.some((n) => n.type === "path"), "щелчок по «+» создаёт связанный объект", `${n0} → ${after.length}`);
+  }
   await B.ctx.close();
   await A.ctx.close();
 } catch (e) {

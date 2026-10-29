@@ -190,6 +190,95 @@ async function tpl(p: Page) {
   await shot("tpl-" + (process.argv[4] || "a"));
 }
 
+
+async function look(p: Page) {
+  const ids = await ev((b) => {
+    const s = b.store;
+    b.camera.set(0, 0, 1);
+    const fa = s.create({ type: "frame", x: 40, y: 80, w: 880, h: 620, name: "Рамка А", color: "blue" });
+    const fb = s.create({ type: "frame", x: 80, y: 160, w: 420, h: 320, name: "Вложенная рамка" });
+    const n1 = s.create({ type: "note", x: 120, y: 220, w: 220, h: 120, color: "yellow", text: "Внутри вложенной" });
+    const n2 = s.create({ type: "note", x: 600, y: 220, w: 240, h: 140, color: "green", text: "Во внешней рамке" });
+    const md = "# Заголовок\n\nДлинный текст с адресом https://example.com/very/long/path/that/should/wrap/inside/the/card/without/overflowing\n\n- пункт один\n- пункт два\n\n```js\nconst veryLongVariableName = someFunctionCall(argumentNumberOne, argumentNumberTwo, three);\n```\n\n| A | B | C |\n|---|---|---|\n| 1 | 2 | 3 |";
+    const n3 = s.create({ type: "note", x: 980, y: 80, w: 300, h: 200, fit: true, text: md });
+    const rt = s.create({ type: "rating", x: 980, y: 620, w: 260, h: 96, max: 5, ri: "star" });
+    const st = s.create({ type: "sticker", x: 1300, y: 600, w: 120, h: 120, emoji: "🏁" });
+    return { fa, fb, n1, n2, n3, rt, st };
+  });
+  await sleep(800);
+  // своя оценка: 4-я звезда
+  const stars = p.locator(`[data-id="${ids.rt}"] .rt-row button`);
+  if ((await stars.count()) >= 4) await stars.nth(3).click();
+  await sleep(400);
+  await ev((b) => b.store.selection.clear());
+  await sleep(300);
+  await shot("look-1-z1");
+  // выделение рамки
+  await ev((b) => b.store.selection.set([b.store.order.find((v: any) => v.type === "frame").id]));
+  await sleep(300);
+  await shot("look-2-selframe");
+  await ev((b) => b.store.selection.clear());
+  // приближение колесом с Ctrl к заметке с текстом
+  const nb = (await p.locator(`[data-id="${ids.n3}"]`).boundingBox())!;
+  await p.mouse.move(nb.x + 60, nb.y + 60);
+  for (let i = 0; i < 14; i++) { await p.keyboard.down("Control"); await p.mouse.wheel(0, -60); await p.keyboard.up("Control"); await sleep(16); }
+  await sleep(40);
+  await shot("look-3-zoomin-now");
+  await sleep(700);
+  await shot("look-4-zoomin-idle");
+  console.log("z after zoom in", await ev((b) => b.camera.z));
+  // отдаление: подписи рамок экранного размера
+  await ev((b) => b.camera.set(60, 120, 0.45));
+  await sleep(700);
+  await shot("look-5-z045");
+  console.log("lod", await ev((b) => b.lod));
+  // перетаскивание внешней рамки: вложенное едет вместе с ней
+  await ev((b) => b.camera.set(0, 0, 1));
+  await sleep(500);
+  const before = await ev((b) => b.store.order.filter((v: any) => v.type !== "frame").map((v: any) => [v.type, Math.round(v.x), Math.round(v.y)]));
+  const fl = await p.locator(`[data-frame-label="${ids.fa}"]`).boundingBox();
+  console.log("frame label", fl);
+  if (fl) {
+    await p.mouse.move(fl.x + 20, fl.y + fl.height / 2);
+    await p.mouse.down();
+    for (let i = 1; i <= 10; i++) { await p.mouse.move(fl.x + 20 + i * 12, fl.y + fl.height / 2 + i * 6); await sleep(16); }
+    await shot("look-6-dragging");
+    await p.mouse.up();
+    await sleep(400);
+  }
+  const after = await ev((b) => b.store.order.filter((v: any) => v.type !== "frame").map((v: any) => [v.type, Math.round(v.x), Math.round(v.y)]));
+  console.log("before", JSON.stringify(before));
+  console.log("after ", JSON.stringify(after));
+  console.log("will-change left:", await p.evaluate(() => [...document.querySelectorAll(".node")].filter((e) => (e as HTMLElement).style.willChange).length));
+  await shot("look-7-after");
+}
+
+
+async function panwc(p: Page) {
+  await ev((b) => { b.store.create({ type: "note", x: 100, y: 100, w: 200, h: 100, text: "a" }); b.camera.set(0, 0, 1); });
+  await sleep(500);
+  const cls = () => p.evaluate(() => document.querySelector(".world")!.className + " wc=" + getComputedStyle(document.querySelector(".world")!).willChange);
+  await p.mouse.move(700, 500);
+  await p.keyboard.down("Space");
+  await p.mouse.down();
+  for (let i = 0; i < 8; i++) { await p.mouse.move(700 - i * 10, 500 - i * 5); await sleep(16); }
+  console.log("mid-pan:", await cls());
+  await p.mouse.up();
+  await p.keyboard.up("Space");
+  await sleep(400);
+  console.log("after pan:", await cls());
+  for (let i = 0; i < 4; i++) { await p.keyboard.down("Control"); await p.mouse.wheel(0, -40); await p.keyboard.up("Control"); await sleep(16); }
+  console.log("mid-zoom:", await cls());
+  // зум, а потом сразу сдвиг — will-change не включается до остановки
+  await p.mouse.wheel(0, 40);
+  console.log("zoom then scroll:", await cls());
+  await sleep(500);
+  console.log("idle:", await cls());
+  await p.mouse.wheel(0, 40);
+  await sleep(30);
+  console.log("plain wheel:", await cls(), await ev((b) => b.camera.z));
+}
+
 async function frames(p: Page) {
   const dump = () => ev((b) => { const f = b.store.order.find((v: any) => v.type === "frame"); return b.store.order.map((v: any) => `${v.type}${v.id === f?.id ? "*" : ""} ${Math.round(v.x)},${Math.round(v.y)} parent=${v.parent === f?.id ? "F" : v.parent ?? "-"}`); });
   await p.mouse.move(700, 450);
@@ -252,6 +341,8 @@ async function frames(p: Page) {
 
 try {
   if (which === "frames") await frames(p);
+  if (which === "look") await look(p);
+  if (which === "panwc") await panwc(p);
   if (which === "tpl") await tpl(p);
   if (which === "rail2") await rail2(p);
   if (which === "rail") await rail(p);
