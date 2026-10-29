@@ -13,6 +13,7 @@ import {
   type Head,
   type LogicRule,
   type NodeData,
+  type NodeProps,
   type NodeType,
   type Route,
   type ShapeKind,
@@ -26,13 +27,16 @@ import { shapeD } from "./shapes.ts";
 
 type N = NodeData & { id: string };
 
-interface Opt {
+interface Opt extends Pick<NodeProps, "tw" | "ti" | "tt" | "tls" | "tfx"> {
   color?: ColorName;
   parent?: string;
   size?: TextSize;
   h?: number;
   font?: FontName;
 }
+
+/** Начертание из опций — только заданные поля. */
+const look = (o: Opt) => ({ ...(o.tw ? { tw: o.tw } : {}), ...(o.ti ? { ti: true } : {}), ...(o.tt ? { tt: o.tt } : {}), ...(o.tls ? { tls: o.tls } : {}), ...(o.tfx ? { tfx: o.tfx } : {}) });
 
 /** Карточки канбана: [колонка, текст, цвет?] → поля kc:<id>. */
 function cards(list: [string, string, ColorName?][]): Record<string, unknown> {
@@ -92,10 +96,10 @@ class TB {
     return this.add({ type: "note", x, y, w, h: o.h ?? 110, fit: true, text, color: o.color ?? "default", parent: o.parent, size: o.size });
   }
   text(x: number, y: number, w: number, text: string, o: Opt & { align?: "left" | "center" | "right" } = {}): string {
-    return this.add({ type: "text", x, y, w, h: o.h ?? 40, fit: true, text, size: o.size ?? "m", color: o.color, parent: o.parent, align: o.align, font: o.font });
+    return this.add({ type: "text", x, y, w, h: o.h ?? 40, fit: true, text, size: o.size ?? "m", color: o.color, parent: o.parent, align: o.align, font: o.font, ...look(o) });
   }
   shape(x: number, y: number, w: number, h: number, kind: ShapeKind, text: string, o: Opt & { fill?: "none" | "tint" | "solid"; dash?: "solid" | "dash" | "dot" } = {}): string {
-    return this.add({ type: "shape", x, y, w, h, kind, text, fill: o.fill ?? "tint", stroke: "m", dash: o.dash ?? "solid", color: o.color ?? "default", parent: o.parent, size: o.size ?? "s", align: "center", font: o.font });
+    return this.add({ type: "shape", x, y, w, h, kind, text, fill: o.fill ?? "tint", stroke: "m", dash: o.dash ?? "solid", color: o.color ?? "default", parent: o.parent, size: o.size ?? "s", align: "center", font: o.font, ...look(o) });
   }
   /** Рамка-устройство: экран телефона, окно браузера, экран игры. */
   device(x: number, y: number, dev: DeviceKind, name: string, w: number, h: number, extra: Partial<NodeData> = {}): string {
@@ -1009,13 +1013,13 @@ function hud(): Clip {
   const f = t.device(0, 0, "game", "Бой: интерфейс игрока", 960, 540);
   t.shape(60, 46, 260, 38, "pill", "❤️ 87 / 100", { parent: f, fill: "solid", color: "red", font: "game" });
   t.shape(60, 94, 200, 32, "pill", "🔷 40 / 60", { parent: f, fill: "solid", color: "blue", font: "game" });
-  t.text(330, 46, 300, "**Волна 3 · 02:41**", { parent: f, align: "center", font: "game" });
+  t.text(330, 46, 300, "Волна 3 · 02:41", { parent: f, align: "center", font: "game", tt: "up", tfx: "outline" });
   t.shape(770, 40, 150, 150, "rect", "Мини-карта", { parent: f, color: "green", font: "game" });
   t.text(60, 400, 320, "📜 Найти ключ от ворот\n⚔️ Победить стражей 2/5", { parent: f, size: "s", font: "game" });
   ["⚔️", "🛡️", "🧪", "🏹", "🔥"].forEach((e, i) => t.shape(330 + i * 62, 450, 54, 54, "sharp", e, { parent: f, fill: i === 0 ? "solid" : "tint", color: i === 0 ? "yellow" : "gray", size: "l" }));
   t.shape(800, 380, 60, 60, "ellipse", "**A**", { parent: f, fill: "solid", color: "green", font: "game" });
   t.shape(866, 320, 60, 60, "ellipse", "**B**", { parent: f, fill: "solid", color: "red", font: "game" });
-  t.note(1000, 0, 340, "**🎮 Безопасная зона**\nПунктир внутри экрана — края, которые могут обрезать телевизоры. Держите важное внутри.\n\nШрифт кнопок — «Игровой»: выделите текст и смените его в стиле.", { color: "violet" });
+  t.note(1000, 0, 340, "**🎮 Безопасная зона**\nПунктир внутри экрана — края, которые могут обрезать телевизоры. Держите важное внутри.\n\nШрифт кнопок — «Игровой», у таймера — обводка: настройки объекта (I) → «Текст».", { color: "violet" });
   t.wd("palette", 1000, 260, {
     w: 340,
     h: 210,
@@ -1059,16 +1063,16 @@ function styleGuide(): Clip {
       { id: "d", hex: "#6c757d", t: "Неактивно" },
     ],
   });
-  t.text(640, 60, 520, "Заголовок H1", { parent: f, size: "xl", font: "wide" });
+  t.text(640, 60, 520, "Заголовок H1", { parent: f, size: "xl", font: "wide", tw: "heavy", tt: "up", tls: "wide" });
   t.text(640, 140, 520, "Подзаголовок H2", { parent: f, size: "l", font: "geo" });
   t.text(640, 200, 520, "Основной текст: читается легко и спокойно. Межстрочный интервал — полтора.", { parent: f, size: "m", font: "round" });
-  t.text(640, 290, 520, "Акцент: «Редкий предмет!»", { parent: f, size: "m", font: "game", color: "red" });
-  t.text(640, 340, 520, "Подпись от руки", { parent: f, size: "m", font: "marker", color: "blue" });
+  t.text(640, 290, 520, "Акцент: «Редкий предмет!»", { parent: f, size: "m", font: "game", color: "red", tfx: "pop" });
+  t.text(640, 340, 520, "Подпись от руки", { parent: f, size: "m", font: "marker", color: "blue", ti: true });
   t.shape(640, 420, 170, 52, "pill", "**Основная**", { parent: f, fill: "solid", color: "blue" });
   t.shape(830, 420, 170, 52, "pill", "Вторичная", { parent: f, fill: "tint", color: "blue" });
   t.shape(1020, 420, 140, 52, "pill", "Контур", { parent: f, fill: "none", color: "blue" });
   t.note(40, 450, 540, "**🗣️ Тон и голос**\n- Говорим просто и на «вы»\n- Коротко: одно действие — одна кнопка\n- Юмор — в мелочах, не в ошибках", { parent: f, color: "cyan" });
-  t.note(640, 510, 520, "**Шрифты:** Широкий — заголовки, Геометрический — подзаголовки, Округлый — текст, Игровой — акценты.\nСменить шрифт: выделите текст → стиль → «Шрифт».", { parent: f, color: "yellow" });
+  t.note(640, 510, 520, "**Шрифты:** Широкий — заголовки, Геометрический — подзаголовки, Округлый — текст, Игровой — акценты.\nШрифт и начертание — в настройках объекта (I) → «Текст»; общий шрифт — меню доски → «Шрифт доски».", { parent: f, color: "yellow" });
   return t.clip();
 }
 
