@@ -8,7 +8,7 @@ export const portal: Attachment<HTMLElement> = (el) => {
 };
 
 /** Фокус и выделение текста в поле при появлении. */
-export const focusSelect: Attachment<HTMLInputElement> = (el) => {
+export const focusSelect: Attachment<HTMLInputElement | HTMLTextAreaElement> = (el) => {
   requestAnimationFrame(() => {
     el.focus({ preventScroll: true });
     el.select();

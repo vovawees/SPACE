@@ -55,7 +55,15 @@ export type NodeType =
   | "icon"
   | "token"
   | "words"
-  | "spoiler";
+  | "spoiler"
+  | "kanban"
+  | "roadmap"
+  | "stats"
+  | "loot"
+  | "curve"
+  | "palette"
+  | "tilemap"
+  | "estimate";
 
 export const COLORS = ["default", "gray", "yellow", "orange", "red", "pink", "violet", "blue", "cyan", "green"] as const;
 export type ColorName = (typeof COLORS)[number];
@@ -423,12 +431,95 @@ export interface NodeProps {
   // «кто первый»: нажатия — поля bq:<id человека> (время)
   /** Скрытый текст: кому открывается по щелчку. */
   sm?: "all" | "self";
+  // канбан: колонки; карточки — поля kc:<id карточки> (KanbanCard)
+  kb?: KanbanCol[];
+  // дорожная карта: сколько периодов, какие, с какого начинать; этапы — поля rb:<id> (RoadBar)
+  pn?: number;
+  pu?: PeriodUnit;
+  ps?: number;
+  // таблица добычи: предметы с весами; последний бросок (i — id выпавших)
+  lo?: LootItem[];
+  drop?: { s: number; i: string[]; n: string; c: string } | null;
+  // кривая: формулы; шкала Y; таблица значений
+  fs?: CurveSeries[];
+  ys?: "lin" | "log";
+  tb?: boolean;
+  // палитра: цвета и вид
+  sw?: Swatch[];
+  pm?: "strip" | "chips";
+  // карта уровня: размер сетки, плитки, фон; клетки — поля gt:<x>:<y> (местность) и go:<x>:<y> (предметы)
+  gw?: number;
+  gh?: number;
+  tiles?: Tile[];
+  gb?: string;
+  leg?: boolean;
+  // покер планирования: колода; карты участников — поля pp:<id человека>
+  pk?: "fib" | "tshirt" | "pow2" | "custom";
+  // рамка: вид устройства (экран телефона, окно браузера…)
+  dev?: DeviceKind;
 }
+
+export interface KanbanCol {
+  id: string;
+  t: string;
+  c?: string;
+  /** Лимит карточек (WIP). */
+  lim?: number;
+}
+/** Карточка канбана: поле kc:<id>. o — порядок в колонке. */
+export interface KanbanCard {
+  t: string;
+  col: string;
+  o: number;
+  c?: string;
+}
+export type PeriodUnit = "w" | "m" | "q" | "s" | "d";
+/** Этап дорожной карты: поле rb:<id>. s — первый период (с 0), d — длительность, o — строка. */
+export interface RoadBar {
+  t: string;
+  s: number;
+  d: number;
+  o: number;
+  c?: string;
+  /** Веха (ромб в одной точке). */
+  m?: boolean;
+  /** Готовность, %. */
+  pv?: number;
+}
+export interface LootItem {
+  id: string;
+  t: string;
+  w: number;
+  c?: string;
+}
+export interface CurveSeries {
+  id: string;
+  /** Формула от x. */
+  f: string;
+  t?: string;
+  c?: string;
+}
+export interface Swatch {
+  id: string;
+  hex: string;
+  t?: string;
+}
+/** Плитка карты: цвет местности или предмет-эмодзи. */
+export interface Tile {
+  id: string;
+  t: string;
+  c?: string;
+  e?: string;
+}
+export type DeviceKind = "phone" | "tablet" | "browser" | "window" | "game";
+export const DEVICE_LABELS: Record<DeviceKind, string> = { phone: "Телефон", tablet: "Планшет", browser: "Браузер", window: "Окно программы", game: "Экран игры 16:9" };
 
 export interface Player {
   id: string;
   t: string;
   c: string;
+  /** Карточка персонажа: предел характеристики (шкала). */
+  m?: number;
 }
 
 export interface ChartPoint {
@@ -468,6 +559,11 @@ export const checkKey = (item: string) => `ck:${item}`;
 export const buzzKey = (user: string) => `bq:${user}`;
 export const wordsKey = (user: string) => `w:${user}`;
 export const dayKey = (iso: string) => `k:${iso}`;
+export const cardKey = (id: string) => `kc:${id}`;
+export const barKey = (id: string) => `rb:${id}`;
+export const terrainKey = (x: number, y: number) => `gt:${x}:${y}`;
+export const objectKey = (x: number, y: number) => `go:${x}:${y}`;
+export const pokerKey = (user: string) => `pp:${user}`;
 
 export const GEOMETRY_KEYS = ["x", "y", "w", "h", "r", "z", "parent"] as const;
 export type GeometryKey = (typeof GEOMETRY_KEYS)[number];
@@ -488,17 +584,59 @@ export interface NodeData extends NodeProps {
 /** Типы с текстом в Y.Text. */
 export const TEXT_TYPES = new Set<NodeType>(["note", "text", "code", "shape", "path", "task", "poll"]);
 
-export type FontName = "sans" | "serif" | "mono" | "hand";
-export const FONTS: { id: FontName; label: string }[] = [
-  { id: "sans", label: "Обычный" },
-  { id: "serif", label: "С засечками" },
-  { id: "mono", label: "Моноширинный" },
-  { id: "hand", label: "Рукописный" },
+export type FontName =
+  | "sans"
+  | "serif"
+  | "mono"
+  | "hand"
+  | "round"
+  | "geo"
+  | "soft"
+  | "narrow"
+  | "wide"
+  | "tech"
+  | "game"
+  | "pixel"
+  | "classic"
+  | "elegant"
+  | "slab"
+  | "old"
+  | "script"
+  | "marker";
+export type FontGroup = "Без засечек" | "С засечками" | "Акцентные" | "Рукописные";
+/** Шрифты узлов: css — семейство, adj — font-size-adjust для мелких по высоте строчных. */
+export const FONTS: { id: FontName; label: string; css: string; group: FontGroup; adj?: number }[] = [
+  { id: "sans", label: "Обычный", css: "var(--font-ui)", group: "Без засечек" },
+  { id: "round", label: "Округлый", css: '"Nunito Variable", var(--font-ui)', group: "Без засечек" },
+  { id: "geo", label: "Геометрический", css: '"Montserrat Variable", var(--font-ui)', group: "Без засечек" },
+  { id: "soft", label: "Мягкий", css: '"Comfortaa Variable", var(--font-ui)', group: "Без засечек" },
+  { id: "narrow", label: "Узкий", css: '"Oswald Variable", var(--font-ui)', group: "Без засечек" },
+  { id: "mono", label: "Моноширинный", css: "var(--font-mono)", group: "Без засечек" },
+  { id: "serif", label: "С засечками", css: "var(--font-serif)", group: "С засечками" },
+  { id: "classic", label: "Книжный", css: '"PT Serif", var(--font-serif)', group: "С засечками" },
+  { id: "elegant", label: "Изящный", css: '"Playfair Display Variable", var(--font-serif)', group: "С засечками" },
+  { id: "slab", label: "Брусковый", css: '"Roboto Slab Variable", var(--font-serif)', group: "С засечками" },
+  { id: "wide", label: "Широкий", css: '"Unbounded Variable", var(--font-ui)', group: "Акцентные" },
+  { id: "tech", label: "Технический", css: '"Exo 2 Variable", var(--font-ui)', group: "Акцентные" },
+  { id: "game", label: "Игровой", css: '"Russo One", var(--font-ui)', group: "Акцентные" },
+  { id: "pixel", label: "Пиксельный", css: '"Pixelify Sans Variable", var(--font-mono)', group: "Акцентные" },
+  { id: "old", label: "Былинный", css: '"Ruslan Display", var(--font-serif)', group: "Акцентные" },
+  { id: "hand", label: "Рукописный", css: "var(--font-hand)", group: "Рукописные", adj: 0.56 },
+  { id: "script", label: "Каллиграфия", css: '"Marck Script", var(--font-hand)', group: "Рукописные", adj: 0.5 },
+  { id: "marker", label: "Фломастер", css: '"Neucha", var(--font-hand)', group: "Рукописные", adj: 0.52 },
 ];
+const FONT_BY_ID = new Map(FONTS.map((f) => [f.id, f]));
+export const fontOf = (id: unknown) => (typeof id === "string" ? FONT_BY_ID.get(id as FontName) : undefined);
+/** Свой шрифт узла (не обычный) — CSS-семейство, иначе null. */
+export function fontCss(id: unknown): string | null {
+  const f = fontOf(id);
+  return f && f.id !== "sans" ? f.css : null;
+}
 /** Где выбор шрифта имеет смысл: есть свой текст, и это не код. */
 export const FONT_TYPES = new Set<NodeType>([
   "note", "text", "shape", "path", "task", "poll", "table", "frame", "counter", "timer", "progress", "button", "switch", "slider", "rating", "clock", "countdown", "chart", "wheel", "status", "tracker", "calc", "gate",
   "stopwatch", "coin", "flipcard", "deck", "random", "score", "turns", "buzzer", "checklist", "input", "calendar", "token", "words", "spoiler",
+  "kanban", "roadmap", "stats", "loot", "curve", "palette", "tilemap", "estimate",
 ]);
 /** Объекты с заголовком: двойной щелчок или Enter — переименовать. */
 export const TITLED_TYPES = new Set<NodeType>(["timer", "counter", "progress", "button", "switch", "slider", "rating", "clock", "countdown", "tracker", "calc"]);
@@ -508,11 +646,12 @@ export const WIDGET_EDIT_TYPES = new Set<NodeType>(["chart", "wheel", "qr", "sta
 export const WIDGET_TYPES = new Set<NodeType>([
   "button", "switch", "slider", "rating", "clock", "countdown", "chart", "qr", "wheel", "status", "tracker", "calc", "gate",
   "stopwatch", "coin", "flipcard", "deck", "random", "score", "turns", "buzzer", "checklist", "input", "calendar", "icon", "token", "words", "spoiler",
+  "kanban", "roadmap", "stats", "loot", "curve", "palette", "tilemap", "estimate",
 ]);
 /** Объекты-приборы: двойной щелчок и Enter открывают панель настроек. */
 export const INSPECT_TYPES = new Set<NodeType>([...WIDGET_TYPES, "timer", "counter", "dice", "progress", "sticker"]);
 /** Типы с высотой по содержимому. */
-export const FIT_TYPES = new Set<NodeType>(["note", "text", "code", "link", "file", "shelf", "table", "task", "poll", "audio", "checklist"]);
+export const FIT_TYPES = new Set<NodeType>(["note", "text", "code", "link", "file", "shelf", "table", "task", "poll", "audio", "checklist", "kanban", "roadmap", "stats", "loot", "estimate"]);
 /** Сохраняют пропорции при изменении размера. */
 export const ASPECT_TYPES = new Set<NodeType>(["image", "video", "sticker", "icon", "token"]);
 
@@ -567,6 +706,14 @@ export const TYPE_LABELS: Record<NodeType, string> = {
   token: "Фишка",
   words: "Облако слов",
   spoiler: "Сюрприз",
+  kanban: "Канбан",
+  roadmap: "Дорожная карта",
+  stats: "Карточка персонажа",
+  loot: "Таблица добычи",
+  curve: "Кривая баланса",
+  palette: "Палитра",
+  tilemap: "Карта уровня",
+  estimate: "Покер планирования",
 };
 
 export const SHAPE_LABELS: Record<ShapeKind, string> = {
@@ -702,6 +849,84 @@ export function defaults(type: NodeType): Partial<NodeData> {
       return { w: 360, h: 250, title: "Одно слово о встрече", max: 3 };
     case "spoiler":
       return { w: 280, h: 150, title: "Нажмите, чтобы открыть", bt: "Сюрприз! 🎉" };
+    case "kanban":
+      return {
+        w: 720,
+        h: 300,
+        fit: true,
+        title: "Задачи",
+        kb: [
+          { id: "a", t: "Идеи", c: "gray" },
+          { id: "b", t: "В работе", c: "blue", lim: 3 },
+          { id: "c", t: "Проверка", c: "orange" },
+          { id: "d", t: "Готово", c: "green" },
+        ],
+        ...({ "kc:k1": { t: "Придумать название", col: "a", o: 1 }, "kc:k2": { t: "Собрать прототип", col: "b", o: 1 }, "kc:k3": { t: "Нарисовать иконку", col: "a", o: 2, c: "pink" } } as object),
+      };
+    case "roadmap":
+      return {
+        w: 720,
+        h: 240,
+        fit: true,
+        title: "Дорожная карта",
+        pn: 8,
+        pu: "w",
+        ...({
+          "rb:r1": { t: "Прототип", s: 0, d: 2, o: 1, c: "violet", pv: 100 },
+          "rb:r2": { t: "Альфа", s: 2, d: 3, o: 2, c: "blue", pv: 40 },
+          "rb:r3": { t: "Тесты", s: 4, d: 3, o: 3, c: "orange" },
+          "rb:r4": { t: "Релиз", s: 7, d: 1, o: 4, c: "green", m: true },
+        } as object),
+      };
+    case "stats":
+      return {
+        w: 300,
+        h: 260,
+        fit: true,
+        title: "Герой",
+        desc: "Воин · уровень 1",
+        emoji: "🧙",
+        pl: [
+          { id: "hp", t: "Здоровье", c: "red", m: 100 },
+          { id: "mp", t: "Мана", c: "blue", m: 50 },
+          { id: "atk", t: "Атака", c: "orange" },
+          { id: "def", t: "Защита", c: "gray" },
+        ],
+        ...({ "sc:hp": 100, "sc:mp": 50, "sc:atk": 12, "sc:def": 8 } as object),
+      };
+    case "loot":
+      return {
+        w: 320,
+        h: 280,
+        fit: true,
+        title: "Сундук",
+        lo: [
+          { id: "a", t: "🪙 Горсть монет", w: 50, c: "gray" },
+          { id: "b", t: "🧪 Зелье лечения", w: 25, c: "green" },
+          { id: "c", t: "🗡️ Стальной меч", w: 15, c: "blue" },
+          { id: "d", t: "💍 Кольцо силы", w: 8, c: "violet" },
+          { id: "e", t: "🐉 Чешуя дракона", w: 2, c: "orange" },
+        ],
+      };
+    case "curve":
+      return { w: 420, h: 280, title: "Опыт до уровня", min: 1, max: 20, fs: [{ id: "a", f: "round(100 * x^1.5)", t: "Опыт", c: "violet" }] };
+    case "palette":
+      return {
+        w: 420,
+        h: 150,
+        title: "Палитра",
+        sw: [
+          { id: "a", hex: "#264653", t: "Глубина" },
+          { id: "b", hex: "#2a9d8f", t: "Бирюза" },
+          { id: "c", hex: "#e9c46a", t: "Песок" },
+          { id: "d", hex: "#f4a261", t: "Абрикос" },
+          { id: "e", hex: "#e76f51", t: "Коралл" },
+        ],
+      };
+    case "tilemap":
+      return { w: 520, h: 330, title: "Карта уровня", gw: 16, gh: 10 };
+    case "estimate":
+      return { w: 380, h: 240, fit: true, title: "Оцениваем задачу", pk: "fib" };
   }
 }
 

@@ -14,6 +14,7 @@
   import "../styles/nodes.css";
   import "../styles/widgets.css";
   import "../styles/play.css";
+  import "../styles/design.css";
   import "../styles/inspector.css";
   import "../styles/custom.css";
 

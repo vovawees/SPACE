@@ -1,0 +1,241 @@
+/* ================= разработка и дизайн (1.3): новые объекты ================= */
+
+/* общая шапка: название слева, число справа */
+:is(.kb-head, .rm-head, .lt-head, .cv-head, .pal-head, .tm-head, .pk-head) {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+:is(.kb-title, .rm-title, .lt-title, .cv-title, .pal-title, .tm-title, .pk-title) {
+  min-width: 0;
+  font-size: calc(14.5px * var(--k));
+  font-weight: 720;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+:is(.kb-title, .rm-title, .lt-title, .cv-title, .pal-title, .tm-title, .pk-title) .rename {
+  width: 100%;
+}
+:is(.kb-n, .rm-n, .lt-n, .cv-n, .tm-n, .pk-n) {
+  flex: none;
+  font-size: calc(11.5px * var(--k));
+  font-weight: 600;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --------------------------------- канбан --------------------------------- */
+
+.kb-card {
+  display: flex;
+  flex-direction: column;
+  gap: calc(8px * var(--k));
+  padding: calc(10px * var(--k)) calc(10px * var(--k)) calc(10px * var(--k));
+  min-height: 100%;
+}
+.node.fit > .kb-card {
+  min-height: 0;
+}
+.kb-card.dragging {
+  overflow: visible;
+  z-index: 1;
+}
+.kb-head {
+  padding: 0 calc(4px * var(--k));
+}
+.kb-cols {
+  display: grid;
+  gap: calc(8px * var(--k));
+  align-items: start;
+}
+.kb-col {
+  --cc: var(--c-gray);
+  display: flex;
+  flex-direction: column;
+  gap: calc(6px * var(--k));
+  min-width: 0;
+  min-height: calc(90px * var(--k));
+  padding: calc(7px * var(--k));
+  border-radius: calc(10px * var(--k));
+  background: color-mix(in oklab, var(--cc) 7%, var(--surface-1));
+  border: 1px solid color-mix(in oklab, var(--cc) 16%, transparent);
+  transition:
+    background var(--t-fast),
+    border-color var(--t-fast);
+}
+.kb-col.over {
+  background: color-mix(in oklab, var(--cc) 16%, var(--surface-1));
+  border-color: color-mix(in oklab, var(--cc) 55%, transparent);
+}
+.kb-col.full .kb-cn {
+  color: var(--danger);
+  font-weight: 700;
+}
+.kb-ch {
+  display: flex;
+  align-items: center;
+  gap: calc(6px * var(--k));
+  min-height: calc(22px * var(--k));
+  padding: 0 calc(2px * var(--k));
+}
+.kb-dot {
+  flex: none;
+  width: calc(8px * var(--k));
+  height: calc(8px * var(--k));
+  border-radius: 50%;
+  background: var(--cc);
+}
+.kb-ct {
+  flex: 1;
+  min-width: 0;
+  font-size: calc(12px * var(--k));
+  font-weight: 680;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: color-mix(in oklab, var(--cc) 55%, var(--ink));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.kb-cn {
+  flex: none;
+  font-size: calc(11px * var(--k));
+  font-weight: 600;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.kb-add {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: calc(20px * var(--k));
+  height: calc(20px * var(--k));
+  margin: calc(-2px * var(--k)) calc(-2px * var(--k)) calc(-2px * var(--k)) 0;
+  border-radius: calc(6px * var(--k));
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.kb-add:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+.kb-list {
+  display: flex;
+  flex-direction: column;
+  gap: calc(6px * var(--k));
+}
+.kb-item {
+  --ic: var(--line-3);
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  padding: calc(7px * var(--k)) calc(9px * var(--k));
+  border-radius: calc(8px * var(--k));
+  background: var(--card-raised);
+  border: 1px solid var(--line-2);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.25);
+  font-size: calc(13px * var(--k));
+  line-height: 1.35;
+  color: var(--ink);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.kb-item.tinted {
+  background: color-mix(in oklab, var(--ic) 14%, var(--card-raised));
+  border-color: color-mix(in oklab, var(--ic) 38%, transparent);
+}
+.kb-item.tinted::before {
+  content: "";
+  position: absolute;
+  left: -1px;
+  top: calc(6px * var(--k));
+  bottom: calc(6px * var(--k));
+  width: calc(3px * var(--k));
+  border-radius: 0 3px 3px 0;
+  background: var(--ic);
+}
+.kb-item:hover {
+  border-color: var(--line-3);
+}
+.kb-item.drag {
+  z-index: 5;
+  cursor: grabbing;
+  box-shadow: var(--card-shadow-lift);
+  opacity: 0.94;
+  pointer-events: none;
+}
+.board.readonly .kb-item,
+.node.locked .kb-item {
+  cursor: default;
+}
+.kb-text {
+  flex: 1;
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 6;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.kb-more {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: calc(18px * var(--k));
+  height: calc(18px * var(--k));
+  margin: calc(-1px * var(--k)) calc(-4px * var(--k)) 0 0;
+  border-radius: 5px;
+  color: var(--ink-3);
+  opacity: 0;
+  cursor: pointer;
+}
+.kb-item:hover .kb-more,
+.kb-more:focus-visible {
+  opacity: 1;
+}
+.kb-more:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+.kb-edit {
+  flex: 1;
+  width: 100%;
+  min-height: calc(38px * var(--k));
+  padding: 0;
+  font: inherit;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  outline: none;
+  resize: none;
+  field-sizing: content;
+}
+.kb-new {
+  padding: calc(7px * var(--k)) calc(9px * var(--k));
+  border-radius: calc(8px * var(--k));
+  background: var(--surface-2);
+  border: 1px dashed var(--line-3);
+  font-size: calc(13px * var(--k));
+}
+.kb-drop {
+  height: calc(3px * var(--k));
+  margin: calc(-1.5px * var(--k)) 2px;
+  border-radius: 3px;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.kb-empty {
+  padding: calc(10px * var(--k)) 4px;
+  border-radius: calc(8px * var(--k));
+  border: 1px dashed var(--line-2);
+  font-size: calc(11.5px * var(--k));
+  color: var(--ink-4);
+  text-align: center;
+}
