@@ -25,6 +25,11 @@ export function offsetIn(el: HTMLElement): Pt {
     x += e.offsetLeft;
     y += e.offsetTop;
     e = e.offsetParent as HTMLElement | null;
+    // offsetLeft отсчитывается от внутреннего края рамки родителя
+    if (e) {
+      x += e.clientLeft;
+      y += e.clientTop;
+    }
   }
   return { x, y };
 }

@@ -50,6 +50,22 @@ import Spade from "@lucide/svelte/icons/spade";
 import Eye from "@lucide/svelte/icons/eye";
 import EyeOff from "@lucide/svelte/icons/eye-off";
 import Eraser from "@lucide/svelte/icons/eraser";
+import Gift from "@lucide/svelte/icons/gift";
+import {
+  PERIOD_UNITS,
+  POKER_KINDS,
+  clearDone,
+  clearMapPatch,
+  islandPatch,
+  kanbanDone,
+  mapSize,
+  paletteText,
+  pokerReset,
+  pokerReveal,
+  pokerVotes,
+  rollLoot,
+  statsOf,
+} from "./design.ts";
 
 type Entry = MenuEntry;
 const dot = (css: string) => `<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5" fill="${css}"/></svg>`;
@@ -97,6 +113,13 @@ export function primaryAction(b: Board, views: NodeView[]): { label: string; run
       if (views.some((v) => v.props.sm === "self")) return null;
       const on = views.every((v) => v.props.on);
       return { label: on ? "Спрятать" : "Открыть", run: () => revealAll(b, ids, !on) };
+    }
+    case "loot":
+      return { label: "Открыть", run: () => void rollLoot(b, ids) };
+    case "estimate": {
+      const on = views.every((v) => v.props.on);
+      if (on) return { label: "Новый раунд", run: () => pokerReset(b, ids) };
+      return views.some((v) => pokerVotes(v.props).length) ? { label: "Открыть карты", run: () => pokerReveal(b, ids, true) } : null;
     }
   }
   return null;
@@ -430,6 +453,77 @@ export function widgetItems(b: Board, views: NodeView[]): Entry[] {
         items: ([["pawn", "Пешка"], ["circle", "Круг"], ["square", "Квадрат"], ["hex", "Шестигранник"], ["star", "Звезда"]] as const).map(([k, label]) => ({ label, checked: !!one && (p?.tk ?? "pawn") === k, run: () => set({ tk: k }) })),
       });
       break;
+
+    case "kanban": {
+      const done = views.reduce((a, v) => a + kanbanDone(v.props)[0], 0);
+      out.push({
+        label: "Убрать готовые",
+        icon: RotateCcw,
+        disabled: !done,
+        run: async () => {
+          if (await ask({ title: "Убрать готовые карточки?", text: "Карточки из последней колонки будут удалены.", ok: "Убрать", danger: true })) clearDone(b, ids);
+        },
+      });
+      out.push(rename);
+      break;
+    }
+
+    case "roadmap":
+      out.push({ label: "Шкала", items: PERIOD_UNITS.map(([k, label]) => ({ label, checked: !!one && (p?.pu ?? "w") === k, run: () => set({ pu: k === "w" ? undefined : k, ps: undefined, cur: undefined }) })) });
+      out.push(rename);
+      break;
+
+    case "stats":
+      out.push({
+        label: "Восстановить шкалы",
+        icon: RotateCcw,
+        run: () => b.view.updateMany(views.map((v) => [v.id, Object.fromEntries(statsOf(v.props).filter((st) => st.m).map((st) => [`sc:${st.id}`, st.m])) as Partial<NodeData>])),
+      });
+      out.push(rename);
+      break;
+
+    case "loot":
+      out.push({ label: "Открыть", icon: Gift, run: () => void rollLoot(b, ids) });
+      if (views.some((v) => v.props.drop)) out.push({ label: "Сбросить результат", icon: RotateCcw, run: () => set({ drop: null }) });
+      out.push(rename);
+      break;
+
+    case "curve":
+      out.push({ label: "Таблица значений", checked: !!one && !!p?.tb, run: () => set({ tb: !p?.tb || undefined }) });
+      out.push({ label: "Шкала Y: логарифм", checked: !!one && p?.ys === "log", run: () => set({ ys: p?.ys === "log" ? undefined : "log" }) });
+      out.push(rename);
+      break;
+
+    case "palette":
+      if (one) {
+        out.push({ label: "Копировать CSS-переменные", icon: Copy, run: async () => (await copyText(paletteText(one.props, "css"))) && toasts.show("CSS-переменные скопированы", { kind: "ok", ms: 1600 }) });
+        out.push({ label: "Копировать HEX", icon: Copy, run: async () => (await copyText(paletteText(one.props, "hex"))) && toasts.show("Список HEX скопирован", { kind: "ok", ms: 1600 }) });
+      }
+      out.push({ label: "Вид", items: ([["strip", "Полосы"], ["chips", "Образцы"]] as const).map(([k, label]) => ({ label, checked: !!one && (p?.pm ?? "strip") === k, run: () => set({ pm: k === "strip" ? undefined : k }) })) });
+      out.push(rename);
+      break;
+
+    case "tilemap":
+      out.push({ label: "Нарисовать остров", run: () => b.view.updateMany(views.map((v) => [v.id, { ...clearMapPatch(v.props), ...islandPatch(...mapSize(v.props)) } as Partial<NodeData>])) });
+      out.push({
+        label: "Очистить карту",
+        icon: Eraser,
+        run: async () => {
+          if (await ask({ title: "Очистить карту?", text: "Все клетки и предметы будут стёрты.", ok: "Очистить", danger: true })) b.view.updateMany(views.map((v) => [v.id, clearMapPatch(v.props) as Partial<NodeData>]));
+        },
+      });
+      out.push({ label: "Легенда", checked: !!one && p?.leg !== false, run: () => set({ leg: p?.leg === false ? undefined : false }) });
+      out.push(rename);
+      break;
+
+    case "estimate": {
+      const on = views.every((v) => v.props.on);
+      out.push({ label: on ? "Скрыть карты" : "Открыть карты", icon: on ? EyeOff : Eye, run: () => pokerReveal(b, ids, !on) });
+      out.push({ label: "Новый раунд", icon: RotateCcw, run: () => pokerReset(b, ids) });
+      out.push({ label: "Колода", items: POKER_KINDS.filter(([k]) => k !== "custom" || views.some((v) => v.props.faces?.length)).map(([k, label]) => ({ label, checked: !!one && (p?.pk ?? "fib") === k, run: () => set({ pk: k === "fib" ? undefined : k }) })) });
+      out.push(rename);
+      break;
+    }
 
     case "gate":
       out.push({ heading: "Условие" });

@@ -18,7 +18,8 @@
   const b = useBoard();
   const p = $derived(v.props);
   const stats = $derived(statsOf(p));
-  const live = $derived(!b.readonly && !v.locked);
+  // закреплённую карточку не сдвинуть, но значения менять можно — как в табло
+  const live = $derived(!b.readonly);
   const k = $derived(Math.max(0.7, Math.min(1.8, v.w / 300)));
   const first = $derived(stats[0]);
   const down = $derived(!!first?.m && statVal(p, first.id) <= 0);

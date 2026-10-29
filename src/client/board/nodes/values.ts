@@ -7,6 +7,7 @@ import { counterValue, diceTotal } from "./games.ts";
 import { votesOf } from "./poll.ts";
 import { timerLeft } from "./timer.ts";
 import { buzzesOf, checklistCount, deckCards, deckLeft, markedDays, swElapsed, swRunning, topScore, wordsCount } from "./play.ts";
+import { curveValue, kanbanDone, pokerSummary, roadShare, statVal, statsOf } from "./design.ts";
 
 const R = (n: number) => Math.round(n * 1000) / 1000;
 
@@ -63,6 +64,7 @@ export function textNumber(t: string): number | null {
 const NUMERIC = new Set([
   "counter", "progress", "slider", "rating", "switch", "gate", "task", "dice", "poll", "tracker", "calc", "status", "timer", "note", "text", "shape", "button", "countdown",
   "stopwatch", "coin", "flipcard", "deck", "random", "score", "turns", "buzzer", "checklist", "input", "calendar", "words", "spoiler",
+  "kanban", "roadmap", "stats", "loot", "curve", "estimate",
 ]);
 
 /** Число в поле ввода (если там число). */
@@ -132,6 +134,20 @@ export function numValue(s: BoardStore, v: NodeView, depth = 0): number | null {
       return markedDays(p);
     case "words":
       return wordsCount(p);
+    case "kanban":
+      return kanbanDone(p)[0];
+    case "roadmap":
+      return Math.round(roadShare(p) * 100);
+    case "stats": {
+      const st = statsOf(p)[0];
+      return st ? statVal(p, st.id) : null;
+    }
+    case "loot":
+      return p.drop?.s ?? 0;
+    case "curve":
+      return depth > 6 ? null : curveValue(s, v, depth + 1);
+    case "estimate":
+      return p.on ? pokerSummary(p).avg : null;
     case "note":
     case "text":
     case "shape": {
@@ -182,6 +198,22 @@ export function doneShare(s: BoardStore, v: NodeView, goal?: number, depth = 0):
       const n = deckCards(p).length;
       return n ? 1 - deckLeft(p) / n : 0;
     }
+    case "kanban": {
+      const [d, all] = kanbanDone(p);
+      return all ? d / all : 0;
+    }
+    case "roadmap":
+      return roadShare(p);
+    case "stats": {
+      const st = statsOf(p)[0];
+      if (!st) return null;
+      const n = statVal(p, st.id);
+      return st.m ? Math.max(0, Math.min(1, n / st.m)) : goal && goal > 0 ? Math.max(0, Math.min(1, n / goal)) : n > 0 ? 1 : 0;
+    }
+    case "estimate":
+      return p.on ? 1 : 0;
+    case "loot":
+    case "curve":
     case "counter":
     case "dice":
     case "calc":

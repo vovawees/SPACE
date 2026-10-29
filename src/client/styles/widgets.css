@@ -62,15 +62,6 @@
     box-shadow 140ms,
     filter 120ms;
 }
-.node.f-serif .big-btn {
-  font-family: var(--font-serif);
-}
-.node.f-mono .big-btn {
-  font-family: var(--font-mono);
-}
-.node.f-hand .big-btn {
-  font-family: var(--font-hand);
-}
 .v-solid .big-btn {
   background: linear-gradient(180deg, color-mix(in oklab, var(--bc1) 88%, #fff), var(--bc1));
   color: #fff;
@@ -646,13 +637,13 @@ div.big-btn .rename {
     height 300ms var(--ease-out);
 }
 .ch-num {
-  font: 650 11px var(--font-ui);
+  font: 650 11px var(--nf, var(--font-ui));
   fill: var(--ink-2);
   text-anchor: middle;
   font-variant-numeric: tabular-nums;
 }
 .ch-lab {
-  font: 500 11px var(--font-ui);
+  font: 500 11px var(--nf, var(--font-ui));
   fill: var(--ink-3);
   text-anchor: middle;
 }
@@ -682,13 +673,13 @@ div.big-btn .rename {
   stroke: var(--fill-c);
 }
 .ch-mid {
-  font: 720 18px var(--font-ui);
+  font: 720 18px var(--nf, var(--font-ui));
   fill: var(--ink);
   text-anchor: middle;
   font-variant-numeric: tabular-nums;
 }
 .ch-leg {
-  font: 500 12px var(--font-ui);
+  font: 500 12px var(--nf, var(--font-ui));
   fill: var(--ink-2);
 }
 .ch-pct {
@@ -858,7 +849,7 @@ div.big-btn .rename {
   filter: brightness(1.18) saturate(1.15);
 }
 .wh-lab {
-  font-family: var(--font-ui);
+  font-family: var(--nf, var(--font-ui));
   font-weight: 700;
   fill: #fff;
   text-anchor: middle;
@@ -887,7 +878,7 @@ div.big-btn .rename {
   border-radius: 50%;
   background: var(--card);
   color: var(--ink);
-  font: 720 clamp(9px, 3.6cqmin, 15px) var(--font-ui);
+  font: 720 clamp(9px, 3.6cqmin, 15px) var(--nf, var(--font-ui));
   border: 3px solid var(--line-3);
   box-shadow: 0 4px 14px rgb(0 0 0 / 0.4);
   cursor: pointer;
@@ -980,7 +971,7 @@ div.big-btn .rename {
   background: color-mix(in oklab, var(--sc) 20%, var(--surface-2));
   border: 1px solid color-mix(in oklab, var(--sc) 45%, transparent);
   color: color-mix(in oklab, var(--sc) 30%, var(--ink));
-  font: 650 calc(14px * var(--k)) / 1.25 var(--font-ui);
+  font: 650 calc(14px * var(--k)) / 1.25 var(--nf, var(--font-ui));
   cursor: pointer;
   transition:
     background 160ms,
@@ -1130,7 +1121,7 @@ div.big-btn .rename {
   background: var(--surface-2);
   border: 1.5px dashed var(--line-3);
   color: var(--ink-3);
-  font: 600 calc(var(--cs) * 0.3) var(--font-ui);
+  font: 600 calc(var(--cs) * 0.3) var(--nf, var(--font-ui));
   cursor: pointer;
   transition:
     transform 140ms var(--ease-spring),

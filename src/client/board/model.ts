@@ -513,6 +513,8 @@ export interface Tile {
 }
 export type DeviceKind = "phone" | "tablet" | "browser" | "window" | "game";
 export const DEVICE_LABELS: Record<DeviceKind, string> = { phone: "Телефон", tablet: "Планшет", browser: "Браузер", window: "Окно программы", game: "Экран игры 16:9" };
+/** Размеры рамок-устройств (экран внутри корпуса). */
+export const DEVICE_SIZES: Record<DeviceKind, [number, number]> = { phone: [390, 844], tablet: [768, 1024], browser: [1280, 800], window: [960, 640], game: [960, 540] };
 
 export interface Player {
   id: string;

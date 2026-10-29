@@ -6,7 +6,8 @@ import { toasts } from "../lib/toast.svelte.ts";
 import type { Board } from "./board.svelte.ts";
 import { brandSvg } from "./brands.ts";
 import { intersects, type Pt } from "./geometry.ts";
-import { SHAPE_KINDS, SHAPE_LABELS, defaults, type NodeData, type NodeType, type ShapeKind } from "./model.ts";
+import { DEVICE_LABELS, DEVICE_SIZES, SHAPE_KINDS, SHAPE_LABELS, defaults, type DeviceKind, type NodeData, type NodeType, type ShapeKind } from "./model.ts";
+import { islandPatch } from "./nodes/design.ts";
 import { pollData } from "./nodes/poll.ts";
 import { emptyTable } from "./nodes/table.svelte.ts";
 import { insertClip, place } from "./ops.ts";
@@ -44,15 +45,21 @@ import CalendarCheck from "@lucide/svelte/icons/calendar-check";
 import Sigma from "@lucide/svelte/icons/sigma";
 import Cpu from "@lucide/svelte/icons/cpu";
 import Globe from "@lucide/svelte/icons/globe";
+import Smartphone from "@lucide/svelte/icons/smartphone";
+import Tablet from "@lucide/svelte/icons/tablet";
+import AppWindow from "@lucide/svelte/icons/app-window";
+import Monitor from "@lucide/svelte/icons/monitor";
+import Gamepad2 from "@lucide/svelte/icons/gamepad-2";
 
 export const LIB_MIME = "application/x-space-lib";
 
-export type LibCat = "basic" | "widgets" | "games" | "shapes" | "stickers" | "templates" | "services";
+export type LibCat = "basic" | "widgets" | "games" | "design" | "shapes" | "stickers" | "templates" | "services";
 
 export const LIB_CATS: { id: LibCat; label: string }[] = [
   { id: "basic", label: "Объекты" },
   { id: "widgets", label: "Виджеты и логика" },
   { id: "games", label: "Игры и встречи" },
+  { id: "design", label: "Разработка и дизайн" },
   { id: "shapes", label: "Фигуры" },
   { id: "stickers", label: "Стикеры" },
   { id: "templates", label: "Шаблоны" },
@@ -149,6 +156,22 @@ const GAMES: LibItem[] = [
   { id: "icon", cat: "games", label: "Значок", words: "иконка пиктограмма символ значок картинка", desc: "Больше сотни значков любого цвета", icon: gi("icon") },
 ];
 
+const DESIGN: LibItem[] = [
+  { id: "kanban", cat: "design", label: "Канбан", words: "доска задач колонки спринт agile scrum todo в работе готово бэклог", desc: "Колонки и карточки — перетаскивайте задачи", icon: gi("kanban") },
+  { id: "roadmap", cat: "design", label: "Дорожная карта", words: "roadmap план этапы гант сроки релиз недели месяцы кварталы спринты вехи", desc: "Этапы и вехи на шкале времени", icon: gi("roadmap") },
+  { id: "estimate", cat: "design", label: "Покер планирования", words: "оценка задач scrum planning poker голос вслепую фибоначчи story points", desc: "Оценки вслепую — потом все открывают", icon: gi("estimate") },
+  { id: "stats", cat: "design", label: "Карточка персонажа", words: "персонаж герой характеристики здоровье hp мана атака rpg npc враг юнит класс", desc: "Портрет, характеристики и шкалы", icon: gi("stats") },
+  { id: "loot", cat: "design", label: "Таблица добычи", words: "лут дроп награда шанс вероятность редкость сундук гача рандом веса", desc: "Предметы с весами: шансы и «открыть»", icon: gi("loot") },
+  { id: "curve", cat: "design", label: "Кривая баланса", words: "формула график опыт уровни прокачка урон экономика баланс функция рост", desc: "Графики формул: опыт, урон, цены", icon: gi("curve") },
+  { id: "tilemap", cat: "design", label: "Карта уровня", words: "уровень тайлы клетки сетка карта локация левел дизайн пиксели подземелье", desc: "Рисуйте местность, ставьте предметы", icon: gi("tilemap") },
+  { id: "palette", cat: "design", label: "Палитра", words: "цвета цвет hex стайлгайд дизайн бренд css переменные", desc: "Цвета проекта — копируйте HEX и CSS", icon: gi("palette") },
+  { id: "dev:phone", cat: "design", label: "Экран телефона", words: "макет мобильное приложение айфон андроид прототип ui ux рамка", desc: "Рамка 390×844 с вырезом", icon: Smartphone },
+  { id: "dev:tablet", cat: "design", label: "Экран планшета", words: "макет планшет ipad приложение прототип ui ux рамка", desc: "Рамка 768×1024", icon: Tablet },
+  { id: "dev:browser", cat: "design", label: "Окно браузера", words: "макет сайт веб страница лендинг прототип ui ux рамка", desc: "Рамка 1280×800 с адресной строкой", icon: AppWindow },
+  { id: "dev:window", cat: "design", label: "Окно программы", words: "макет приложение десктоп программа окно прототип ui рамка", desc: "Рамка 960×640 с заголовком", icon: Monitor },
+  { id: "dev:game", cat: "design", label: "Экран игры", words: "макет игра интерфейс hud меню 16:9 экран прототип рамка", desc: "16:9 с безопасной зоной для HUD", icon: Gamepad2 },
+];
+
 const SHAPES: LibItem[] = SHAPE_KINDS.map((k) => ({ id: `shape:${k}`, cat: "shapes" as const, label: SHAPE_LABELS[k], words: "фигура блок-схема", svg: shapeGlyph(k, 26, 1.6) }));
 
 /* Эмодзи, попавший в две группы, показывается в первой: ключи списка должны быть
@@ -179,7 +202,7 @@ const SERVICES: LibItem[] = (
   ] as const
 ).map(([id, label, desc, url]) => ({ id: `svc:${id}`, cat: "services" as const, label, desc, url, svg: brandSvg(id, 22), words: "ссылка интеграция встроить " + id, ask: "url" as const }));
 
-export const LIB_ITEMS: LibItem[] = [...BASIC, ...WIDGETS, ...GAMES, ...SHAPES, ...STICKERS, ...TPL, ...SERVICES];
+export const LIB_ITEMS: LibItem[] = [...BASIC, ...WIDGETS, ...GAMES, ...DESIGN, ...SHAPES, ...STICKERS, ...TPL, ...SERVICES];
 
 export function libItem(id: string): LibItem | undefined {
   return LIB_ITEMS.find((i) => i.id === id);
@@ -255,6 +278,11 @@ export function insertLib(b: Board, id: string, at: Pt, opts: { drop?: boolean }
     return r;
   }
   if (id.startsWith("sticker:")) return { ...mk("sticker", { emoji: it.emoji }), edit: undefined };
+  if (id.startsWith("dev:")) {
+    const dev = id.slice(4) as DeviceKind;
+    const [w, h] = DEVICE_SIZES[dev] ?? [960, 640];
+    return mk("frame", { dev, w, h, name: DEVICE_LABELS[dev] ?? "Макет", ...(dev === "browser" ? { url: "example.com" } : {}) });
+  }
   if (id.startsWith("tpl:")) {
     const t = TEMPLATES.find((x) => `tpl:${x.id}` === id);
     if (!t) return null;
@@ -323,7 +351,16 @@ export function insertLib(b: Board, id: string, at: Pt, opts: { drop?: boolean }
     case "token":
     case "words":
     case "spoiler":
+    case "kanban":
+    case "roadmap":
+    case "stats":
+    case "loot":
+    case "curve":
+    case "palette":
+    case "estimate":
       return { ...mk(id), edit: undefined };
+    case "tilemap":
+      return { ...mk("tilemap", islandPatch(16, 10) as Partial<NodeData>), edit: undefined };
     case "pie":
       return mk("chart", { ct: "donut", w: 360, h: 240 });
     case "qr":

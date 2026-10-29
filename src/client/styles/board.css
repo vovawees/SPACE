@@ -1228,19 +1228,16 @@
 }
 
 /* шрифт узла (свойство font) — коду и подписям интерфейса не передаётся */
-.node.f-serif {
-  font-family: var(--font-serif);
+.node.ff {
+  font-family: var(--nf);
+  font-size-adjust: var(--nfa, none);
 }
-.node.f-mono {
-  font-family: var(--font-mono);
-}
-.node.f-hand {
-  font-family: var(--font-hand);
-  font-size-adjust: 0.56;
-}
-.node.f-serif :is(button, input, .chip),
-.node.f-mono :is(button, input, .chip),
-.node.f-hand :is(button, input, .chip) {
+.node.ff :is(button, input, .chip) {
   font-family: var(--font-ui);
   font-size-adjust: none;
+}
+/* кнопки, которые сами — содержимое (большая кнопка, карты покера) */
+.node.ff :is(.big-btn, .pk-pick) {
+  font-family: var(--nf);
+  font-size-adjust: var(--nfa, none);
 }

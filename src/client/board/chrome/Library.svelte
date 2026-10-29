@@ -7,6 +7,7 @@
   import Gamepad2 from "@lucide/svelte/icons/gamepad-2";
   import LayoutTemplate from "@lucide/svelte/icons/layout-template";
   import PanelLeftClose from "@lucide/svelte/icons/panel-left-close";
+  import PencilRuler from "@lucide/svelte/icons/pencil-ruler";
   import Plug from "@lucide/svelte/icons/plug";
   import Search from "@lucide/svelte/icons/search";
   import Shapes from "@lucide/svelte/icons/shapes";
@@ -27,7 +28,7 @@
   import { pickFiles } from "../menus.ts";
 
   type Icon = Component<Record<string, unknown>>;
-  const ICONS: Record<LibCat, Icon> = { basic: Boxes, widgets: Zap, games: Gamepad2, shapes: Shapes, stickers: SmilePlus, templates: LayoutTemplate, services: Plug };
+  const ICONS: Record<LibCat, Icon> = { basic: Boxes, widgets: Zap, games: Gamepad2, design: PencilRuler, shapes: Shapes, stickers: SmilePlus, templates: LayoutTemplate, services: Plug };
 
   const b = useBoard();
   const st = session.settings;

@@ -4,7 +4,7 @@
      сами меряют высоту; в документ её пишет только тот, кто правил. */
   import type { Component } from "svelte";
   import { useBoard } from "../board.svelte.ts";
-  import { colorCss, colorKey, type NodeType } from "../model.ts";
+  import { colorCss, colorKey, fontCss, fontOf, type NodeType } from "../model.ts";
   import CodeNode from "../nodes/CodeNode.svelte";
   import FileNode from "../nodes/FileNode.svelte";
   import FrameNode from "../nodes/FrameNode.svelte";
@@ -54,6 +54,14 @@
   import TokenNode from "../nodes/TokenNode.svelte";
   import WordsNode from "../nodes/WordsNode.svelte";
   import SpoilerNode from "../nodes/SpoilerNode.svelte";
+  import KanbanNode from "../nodes/KanbanNode.svelte";
+  import RoadmapNode from "../nodes/RoadmapNode.svelte";
+  import StatsNode from "../nodes/StatsNode.svelte";
+  import LootNode from "../nodes/LootNode.svelte";
+  import CurveNode from "../nodes/CurveNode.svelte";
+  import PaletteNode from "../nodes/PaletteNode.svelte";
+  import TilemapNode from "../nodes/TilemapNode.svelte";
+  import EstimateNode from "../nodes/EstimateNode.svelte";
   import { playFx } from "../nodes/fx.ts";
   import { styleOf } from "../style.ts";
   import { untrack } from "svelte";
@@ -112,6 +120,14 @@
     token: TokenNode,
     words: WordsNode,
     spoiler: SpoilerNode,
+    kanban: KanbanNode,
+    roadmap: RoadmapNode,
+    stats: StatsNode,
+    loot: LootNode,
+    curve: CurveNode,
+    palette: PaletteNode,
+    tilemap: TilemapNode,
+    estimate: EstimateNode,
   };
   /* «Экранные» размеры (обводки, подписи, ручки) умножаются на --iz = 1/масштаб.
      Переменная ставится только узлам, которым она сейчас нужна: смена масштаба
@@ -137,6 +153,9 @@
   const free = $derived(v.type === "path");
   const op = $derived(typeof v.props.opacity === "number" ? Math.max(0.1, Math.min(1, v.props.opacity)) : 1);
   const look = $derived(styleOf(v.props));
+  // свой шрифт узла — переменной: подписи интерфейса внутри остаются обычными
+  const nf = $derived(fontCss(v.props.font));
+  const nfa = $derived(nf ? (fontOf(v.props.font)?.adj ?? null) : null);
   // спрятан логикой: участникам не виден, редакторам — призраком
   const hid = $derived(!!v.props.hid);
   const gone = $derived(hid && b.readonly);
@@ -163,7 +182,7 @@
 
 <div
   bind:this={el}
-  class="node t-{v.type}{v.props.font ? ` f-${v.props.font}` : ''}{look.cls ? ` ${look.cls}` : ''}"
+  class="node t-{v.type}{nf ? ` ff f-${v.props.font}` : ''}{look.cls ? ` ${look.cls}` : ''}"
   class:sel
   class:editing
   class:fit={v.fit}
@@ -181,6 +200,8 @@
   style:width={free ? null : `${v.w}px`}
   style:height={free || v.fit ? null : `${v.h}px`}
   style:--c={colorCss(color)}
+  style:--nf={nf}
+  style:--nfa={nfa}
   style:--peer={remote}
   style:--iz={iz}
   style:opacity={op < 1 ? op : null}

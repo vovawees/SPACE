@@ -24,7 +24,7 @@ export interface Settings {
   sound: boolean;
   /** Левая панель «Библиотека»: открыта ли и на каком разделе. */
   library: boolean;
-  libCat: "basic" | "widgets" | "games" | "shapes" | "stickers" | "templates" | "services";
+  libCat: "basic" | "widgets" | "games" | "design" | "shapes" | "stickers" | "templates" | "services";
 }
 
 const DEFAULTS: Settings = {

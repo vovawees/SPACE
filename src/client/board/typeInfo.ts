@@ -50,6 +50,14 @@ import Sparkles from "@lucide/svelte/icons/sparkles";
 import ChessPawn from "@lucide/svelte/icons/chess-pawn";
 import Cloud from "@lucide/svelte/icons/cloud";
 import Gift from "@lucide/svelte/icons/gift";
+import SquareKanban from "@lucide/svelte/icons/square-kanban";
+import ChartGantt from "@lucide/svelte/icons/chart-gantt";
+import ShieldHalf from "@lucide/svelte/icons/shield-half";
+import Gem from "@lucide/svelte/icons/gem";
+import ChartSpline from "@lucide/svelte/icons/chart-spline";
+import Palette from "@lucide/svelte/icons/palette";
+import MapIcon from "@lucide/svelte/icons/map";
+import Hand from "@lucide/svelte/icons/hand";
 import type { NodeType } from "./model.ts";
 
 export type Icon = Component<Record<string, unknown>>;
@@ -105,6 +113,14 @@ export const TYPE_ICONS: Partial<Record<NodeType, Icon>> = {
   token: ChessPawn,
   words: Cloud,
   spoiler: Gift,
+  kanban: SquareKanban,
+  roadmap: ChartGantt,
+  stats: ShieldHalf,
+  loot: Gem,
+  curve: ChartSpline,
+  palette: Palette,
+  tilemap: MapIcon,
+  estimate: Hand,
 };
 
 export const typeIcon = (t: NodeType): Icon => TYPE_ICONS[t] ?? Shapes;

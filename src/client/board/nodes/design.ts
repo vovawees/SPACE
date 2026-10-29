@@ -29,9 +29,10 @@ import { randInt } from "./games.ts";
 import { MONTHS } from "./play.ts";
 import { inputsOf, numValue } from "./values.ts";
 
-type Patch = Record<string, unknown>;
+export type Patch = Record<string, unknown>;
 const raw = (p: NodeProps) => p as Record<string, unknown>;
-const put = (b: Board, id: string, patch: Patch) => b.view.update(id, patch as Partial<NodeData>);
+/** Правка полей узла (в том числе kc:, rb:, gt:… — по одному на запись). */
+export const put = (b: Board, id: string, patch: Patch) => b.view.update(id, patch as Partial<NodeData>);
 const putMany = (b: Board, list: [string, Patch][]) => b.view.updateMany(list.map(([id, p]) => [id, p as Partial<NodeData>]));
 type Who = { n: string; c: string };
 const by = (b: Board): Who => ({ n: b.me.name, c: b.me.color });

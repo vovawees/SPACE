@@ -21,7 +21,7 @@ import SkipForward from "@lucide/svelte/icons/skip-forward";
 import UserRound from "@lucide/svelte/icons/user-round";
 import Users from "@lucide/svelte/icons/users";
 import { toasts } from "../../lib/toast.svelte.ts";
-import { download } from "../../lib/util.ts";
+import { copyText, download } from "../../lib/util.ts";
 import { ask } from "../../ui/confirm.svelte.ts";
 import { menu } from "../../ui/menu.svelte.ts";
 import type { Board } from "../board.svelte.ts";
@@ -30,6 +30,8 @@ import { DASHES, FILLS, HEAD_SIZES, SIZES, TEXT_SIZES, reversePath, setRoute } f
 import {
   CALC_LABELS,
   CODE_LANGS,
+  DEVICE_LABELS,
+  DEVICE_SIZES,
   FONTS,
   FONT_TYPES,
   GATE_LABELS,
@@ -74,6 +76,32 @@ import {
   wordsCount,
 } from "../nodes/play.ts";
 import { votesOf } from "../nodes/poll.ts";
+import {
+  MAP_MAX,
+  PERIOD_UNITS,
+  POKER_KINDS,
+  RARITY,
+  clearDone,
+  clearMapPatch,
+  curveSeries,
+  islandPatch,
+  isObjectTile,
+  kanbanCols,
+  kanbanDone,
+  lootChances,
+  lootItems,
+  mapSize,
+  paletteText,
+  periodCount,
+  pokerReset,
+  pokerReveal,
+  pokerVotes,
+  roadShare,
+  rollLoot,
+  statsOf,
+  swatchesOf,
+  tilesOf,
+} from "../nodes/design.ts";
 import { colsOf, insertCol, insertRow, removeCol, removeRow, rowsOf, MAX_COLS, MAX_ROWS } from "../nodes/table.svelte.ts";
 import { DAY, HOUR, MIN, SEC, TIMER_PRESETS_MS, TIMER_SOUNDS, timerDur, timerLeft, timerPatch, timerStep } from "../nodes/timer.ts";
 import { statusesOf } from "../nodes/values.ts";
@@ -270,6 +298,19 @@ function typeSections(c: Ctx, t: NodeType): Section[] {
       return [
         S("main", undefined, [
           f.str("name", "Название", { ph: "Рамка", max: 80 }),
+          {
+            k: "select",
+            key: "dev",
+            label: "Вид",
+            opts: [["", "Обычная рамка"], ...(Object.entries(DEVICE_LABELS) as Opt[])],
+            get: () => p.dev ?? "",
+            set: (dev) => {
+              const size = dev ? DEVICE_SIZES[dev as keyof typeof DEVICE_SIZES] : undefined;
+              // устройство — сразу своего размера (левый верхний угол на месте)
+              b.view.updateMany(views.map((x) => [x.id, { dev: (dev || undefined) as NodeProps["dev"], ...(size && !x.props.dev ? { w: size[0], h: size[1] } : {}) } as Partial<NodeData>]));
+            },
+          },
+          p.dev === "browser" && f.str("url", "Адрес в строке", { ph: "example.com", max: 200 }),
           one && f.btns([{ label: "Подогнать под содержимое", icon: Scan, run: () => fitFrame(b, v.id) }]),
         ]),
       ];
@@ -918,6 +959,305 @@ function typeSections(c: Ctx, t: NodeType): Section[] {
           f.seg("sm", "Открывается", [["all", "У всех сразу"], ["self", "У каждого своё"]], "all"),
         ]),
       ];
+
+    /* --------------------------- разработка и дизайн (1.3) --------------------------- */
+
+    case "kanban": {
+      const [done, all] = kanbanDone(p);
+      return [
+        S("main", undefined, [
+          title("Канбан"),
+          one && {
+            k: "list",
+            key: "kb",
+            label: "Колонки",
+            add: "Добавить колонку",
+            ph: "Название колонки",
+            color: true,
+            num: "Лимит",
+            hint: "Лимит — сколько карточек можно держать в колонке (0 — без лимита). Последняя колонка считается «готово».",
+            min: 1,
+            max: 8,
+            get: () => kanbanCols(p).map((x) => ({ id: x.id, t: x.t, c: x.c, v: x.lim ?? 0 })),
+            set: (rows) => c.put({ kb: rows.map((r) => ({ id: r.id, t: r.t, ...(r.c ? { c: r.c } : {}), ...(r.v && r.v > 0 ? { lim: Math.round(r.v) } : {}) })) }),
+            make: (n) => ({ id: rid(), t: `Колонка ${n + 1}`, c: PLAYER_COLORS[n % PLAYER_COLORS.length]!, v: 0 }),
+          },
+          one && f.info(all ? `Готово ${done} из ${all}` : "Пока нет карточек: «+» у колонки выделенного канбана"),
+          f.btns([
+            {
+              label: "Убрать готовые",
+              icon: RotateCcw,
+              disabled: one && !done,
+              run: async () => {
+                if (await ask({ title: "Убрать готовые карточки?", text: "Карточки из последней колонки будут удалены.", ok: "Убрать", danger: true })) clearDone(b, ids);
+              },
+            },
+          ]),
+        ]),
+      ];
+    }
+
+    case "roadmap":
+      return [
+        S("main", undefined, [
+          title("Дорожная карта"),
+          f.seg("pu", "Шкала", PERIOD_UNITS as Opt[], "w", "select"),
+          f.num("pn", "Сколько периодов", { int: true, stepper: true, min: 2, max: 36, def: 8, half: true }),
+          f.num("ps", p.pu === "m" ? "С месяца (0 — янв.)" : "Начать с номера", {
+            int: true,
+            stepper: true,
+            min: p.pu === "m" ? 0 : -999,
+            max: p.pu === "m" ? 11 : 9999,
+            def: p.pu === "m" ? new Date().getMonth() : 1,
+            half: true,
+          }),
+          f.num("cur", "Сейчас — период №", {
+            int: true,
+            stepper: true,
+            min: 0,
+            max: periodCount(p),
+            empty: true,
+            ph: p.pu === "m" ? "по календарю" : "не показывать",
+            hint: p.pu === "m" ? "Для месяцев отметка «сейчас» ставится по календарю" : "Линия «сейчас» на этом периоде",
+          }),
+          one && f.info(`Этапов: ${Object.keys(p).filter((k) => k.startsWith("rb:")).length} · готово ${Math.round(roadShare(p) * 100)} %. Щелчок по этапу выделенной карты — цвет, готовность, веха.`),
+        ]),
+      ];
+
+    case "stats":
+      return [
+        S("main", undefined, [
+          { k: "emoji", key: "emoji", label: "Портрет", get: () => p.emoji, set: (e) => c.put({ emoji: e }) },
+          f.str("title", "Имя", { ph: "Персонаж", max: 60 }),
+          f.str("desc", "Класс или роль", { ph: "Маг 5 уровня", max: 80 }),
+          one && {
+            k: "list",
+            key: "pl",
+            label: "Характеристики",
+            add: "Добавить",
+            ph: "Здоровье, сила…",
+            color: true,
+            num: "Максимум",
+            hint: "С максимумом — шкала (здоровье 80 / 100); 0 — просто число",
+            min: 0,
+            max: 12,
+            get: () => statsOf(p).map((x) => ({ id: x.id, t: x.t, c: x.c, v: x.m ?? 0 })),
+            set: (rows) => c.put({ pl: rows.map((r) => ({ id: r.id, t: r.t, c: r.c ?? "blue", ...(r.v && r.v > 0 ? { m: r.v } : {}) })) }),
+            make: (n) => ({ id: rid(), t: "", c: PLAYER_COLORS[n % PLAYER_COLORS.length]!, v: 0 }),
+          },
+          f.str("bt", "Заметки", { ph: "Умения, снаряжение, история", lines: 3, max: 1000 }),
+          f.btns([
+            {
+              label: "Восстановить шкалы",
+              icon: RotateCcw,
+              title: "Значения со шкалой — до максимума",
+              run: () => b.view.updateMany(views.map((x) => [x.id, Object.fromEntries(statsOf(x.props).filter((st) => st.m).map((st) => [`sc:${st.id}`, st.m])) as Partial<NodeData>])),
+            },
+          ]),
+        ]),
+      ];
+
+    case "loot": {
+      const ch = lootChances(p);
+      return [
+        S("main", undefined, [
+          f.btns([{ label: (p.count ?? 1) > 1 ? `Открыть ×${p.count}` : "Открыть", icon: Dices, primary: true, run: () => rollLoot(b, ids) }]),
+          title("Таблица добычи"),
+          one && {
+            k: "list",
+            key: "lo",
+            label: "Предметы",
+            add: "Добавить предмет",
+            ph: "Предмет",
+            color: true,
+            num: "Вес",
+            hint: "Шанс = вес предмета / сумма весов. Цвет — редкость.",
+            min: 1,
+            max: 30,
+            get: () => lootItems(p).map((x) => ({ id: x.id, t: x.t, c: x.c, v: x.w })),
+            set: (rows) => c.put({ lo: rows.map((r) => ({ id: r.id, t: r.t, w: Math.max(0, r.v ?? 1), ...(r.c ? { c: r.c } : {}) })), drop: null }),
+            make: (n) => ({ id: rid(), t: "", c: RARITY[Math.min(n, RARITY.length - 1)]![0], v: Math.max(1, 50 - n * 10) }),
+          },
+          one && !!ch.length && f.info(lootItems(p).map((x, i) => `${x.t || "Предмет"} — ${Math.round((ch[i] ?? 0) * 1000) / 10} %`).join(" · ")),
+          f.num("count", "Предметов за раз", { int: true, stepper: true, min: 1, max: 10, def: 1 }),
+          !!p.drop && f.btns([{ label: "Сбросить результат", icon: RotateCcw, run: () => c.put({ drop: null }) }], "loot-reset"),
+        ]),
+      ];
+    }
+
+    case "curve":
+      return [
+        S("main", undefined, [
+          title("Кривая баланса"),
+          one && {
+            k: "list",
+            key: "fs",
+            label: "Формулы от x",
+            add: "Добавить кривую",
+            ph: "100 * x^1.5",
+            color: true,
+            hint: "x — уровень (или значение со входящей стрелки). Можно: + − * / ^, скобки, round(), floor(), min(), max(), sqrt(), log(), if(условие; да; нет)",
+            min: 1,
+            max: 6,
+            get: () => curveSeries(p).map((x) => ({ id: x.id, t: x.f, c: x.c })),
+            set: (rows) => {
+              const old = new Map(curveSeries(p).map((x) => [x.id, x]));
+              c.put({ fs: rows.map((r) => ({ id: r.id, f: r.t, ...(old.get(r.id)?.t ? { t: old.get(r.id)!.t } : {}), ...(r.c ? { c: r.c } : {}) })) });
+            },
+            make: (n) => ({ id: rid(), t: n ? "50 * x + 100" : "100 * x^1.5", c: ["violet", "orange", "cyan", "green", "pink", "yellow"][n % 6] }),
+          },
+          one && {
+            k: "list",
+            key: "fs-names",
+            label: "Названия кривых",
+            hint: "Для подписей и таблицы: «Опыт», «Урон»",
+            min: curveSeries(p).length,
+            max: curveSeries(p).length,
+            ph: "Без названия",
+            get: () => curveSeries(p).map((x) => ({ id: x.id, t: x.t ?? "" })),
+            set: (rows) => c.put({ fs: curveSeries(p).map((x) => ({ ...x, t: rows.find((r) => r.id === x.id)?.t.trim() || undefined })) }),
+          },
+          f.num("min", "x от", { half: true, def: 1 }),
+          f.num("max", "x до", { half: true, def: 20 }),
+          f.seg("ys", "Шкала Y", [["lin", "Обычная"], ["log", "Логарифм"]], "lin"),
+          f.tog("tb", "Таблица значений"),
+        ]),
+      ];
+
+    case "palette": {
+      const sw = swatchesOf(p);
+      return [
+        S("main", undefined, [
+          title("Палитра"),
+          f.seg("pm", "Вид", [["strip", "Полосы"], ["chips", "Образцы"]], "strip"),
+          one && {
+            k: "list",
+            key: "sw",
+            label: "Цвета",
+            add: "Добавить цвет",
+            ph: "Название цвета",
+            color: true,
+            hint: "Кружок — сам цвет (можно свой HEX). Щелчок по цвету на доске копирует HEX.",
+            min: 0,
+            max: 24,
+            get: () => sw.map((x) => ({ id: x.id, t: x.t ?? "", c: x.hex })),
+            set: (rows) =>
+              c.put({
+                sw: rows.map((r) => ({ id: r.id, hex: /^#[\da-f]{6}$/i.test(r.c ?? "") ? r.c!.toLowerCase() : (sw.find((x) => x.id === r.id)?.hex ?? "#7c6cf2"), ...(r.t.trim() ? { t: r.t.trim() } : {}) })),
+              }),
+            make: (n) => ({ id: rid(), t: "", c: ["#7c6cf2", "#f97316", "#22c55e", "#06b6d4", "#ec4899", "#eab308"][n % 6] }),
+          },
+          one &&
+            !!sw.length &&
+            f.btns([
+              { label: "Копировать CSS", run: () => void copyText(paletteText(p, "css")).then((ok) => ok && toasts.show("CSS-переменные скопированы", { kind: "ok", ms: 1600 })) },
+              { label: "Копировать HEX", run: () => void copyText(paletteText(p, "hex")).then((ok) => ok && toasts.show("Список HEX скопирован", { kind: "ok", ms: 1600 })) },
+            ]),
+        ]),
+      ];
+    }
+
+    case "tilemap": {
+      const all = tilesOf(p);
+      const ground = all.filter((x) => !isObjectTile(x));
+      const things = all.filter((x) => isObjectTile(x));
+      const [w, h] = mapSize(p);
+      const emojiOf = (raw: string, prev?: string): [string, string] => {
+        const t = raw.trim();
+        const first = [...new Intl.Segmenter("ru", { granularity: "grapheme" }).segment(t)][0]?.segment ?? "";
+        if (first && /\p{Extended_Pictographic}|\p{Regional_Indicator}/u.test(first)) return [first, t.slice(first.length).trim()];
+        return [prev ?? "⭐", t];
+      };
+      const resize = (gw: number | null, gh: number | null) => {
+        const nw = clampN(Math.round(gw ?? w), 2, MAP_MAX);
+        const nh = clampN(Math.round(gh ?? h), 2, MAP_MAX);
+        // карта растёт вместе с объектом: клетка остаётся того же размера
+        const cell = Math.min((v.w - 20) / w, (v.h - 76) / h);
+        c.put({ gw: nw === 16 ? undefined : nw, gh: nh === 10 ? undefined : nh, ...(one && cell > 4 ? { w: Math.round(clampN(cell * nw + 20, 160, 4000)), h: Math.round(clampN(cell * nh + 76, 120, 4000)) } : {}) });
+      };
+      return [
+        S("main", undefined, [
+          title("Карта уровня"),
+          { k: "num", key: "gw", label: "Ширина, клеток", half: true, int: true, stepper: true, min: 2, max: MAP_MAX, get: () => w, set: (n) => resize(n, null) },
+          { k: "num", key: "gh", label: "Высота, клеток", half: true, int: true, stepper: true, min: 2, max: MAP_MAX, get: () => h, set: (n) => resize(null, n) },
+          { k: "select", key: "gb", label: "Фон", opts: [["", "Пусто"], ...ground.map((x) => [x.id, x.t] as Opt)], get: () => p.gb ?? "", set: (gb) => c.put({ gb: gb || undefined }) },
+          f.tog("leg", "Легенда под картой", undefined, true),
+          one && {
+            k: "list",
+            key: "tiles-ground",
+            label: "Местность",
+            add: "Добавить",
+            ph: "Трава, вода…",
+            color: true,
+            min: 0,
+            max: 16,
+            get: () => ground.map((x) => ({ id: x.id, t: x.t, c: x.c })),
+            set: (rows) => c.put({ tiles: [...rows.map((r) => ({ id: r.id, t: r.t, c: r.c ?? "#888888", ...(ground.find((x) => x.id === r.id)?.e ? { e: ground.find((x) => x.id === r.id)!.e } : {}) })), ...things] }),
+            make: () => ({ id: rid(), t: "", c: "#8b6b4a" }),
+          },
+          one && {
+            k: "list",
+            key: "tiles-things",
+            label: "Предметы",
+            hint: "Эмодзи в начале названия — значок на карте: «🗝️ Ключ»",
+            add: "Добавить",
+            ph: "🗝️ Ключ",
+            min: 0,
+            max: 24,
+            get: () => things.map((x) => ({ id: x.id, t: `${x.e ?? ""} ${x.t}`.trim() })),
+            set: (rows) =>
+              c.put({
+                tiles: [
+                  ...ground,
+                  ...rows.map((r) => {
+                    const [e, t] = emojiOf(r.t, things.find((x) => x.id === r.id)?.e);
+                    return { id: r.id, t: t || "Предмет", e };
+                  }),
+                ],
+              }),
+            make: () => ({ id: rid(), t: "⭐ " }),
+          },
+          f.btns([
+            { label: "Остров", title: "Нарисовать остров заново", run: () => b.view.updateMany(views.map((x) => [x.id, { ...clearMapPatch(x.props), ...islandPatch(...mapSize(x.props)) } as Partial<NodeData>])) },
+            {
+              label: "Очистить",
+              icon: RotateCcw,
+              danger: true,
+              run: async () => {
+                if (await ask({ title: "Очистить карту?", text: "Все клетки и предметы будут стёрты.", ok: "Очистить", danger: true })) b.view.updateMany(views.map((x) => [x.id, clearMapPatch(x.props) as Partial<NodeData>]));
+              },
+            },
+          ]),
+          f.info("Выделите карту: снизу появятся кисть, заливка и ластик."),
+        ]),
+      ];
+    }
+
+    case "estimate": {
+      const n = one ? pokerVotes(p).length : 0;
+      const open = views.every((x) => x.props.on);
+      return [
+        S("main", undefined, [
+          f.btns([
+            { label: open ? "Скрыть карты" : "Открыть карты", primary: !open, run: () => pokerReveal(b, ids, !open) },
+            { label: "Новый раунд", icon: RotateCcw, run: () => pokerReset(b, ids) },
+          ]),
+          f.str("title", "Что оцениваем", { ph: "Оценка задачи", max: 120 }),
+          f.seg("pk", "Колода", POKER_KINDS as Opt[], "fib", "select"),
+          p.pk === "custom" && {
+            k: "text",
+            key: "faces",
+            label: "Свои карты",
+            ph: "1, 2, 3, 5, 8, ?",
+            hint: "Через запятую, до 24 карт",
+            max: 300,
+            get: () => (p.faces ?? []).join(", "),
+            set: (t) => c.put({ faces: t.split(/[,;\n]/).map((x) => x.trim()).filter(Boolean).slice(0, 24) }),
+          },
+          one && f.info(n ? `Выбрали карту: ${n}` : "Пока никто не выбрал"),
+        ]),
+      ];
+    }
   }
   return [];
 }

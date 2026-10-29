@@ -199,6 +199,54 @@ export interface SceneOptions {
 /** Текущий масштаб отрисовки: мелкое на экране рисуется дешевле (без скруглений). */
 let curZ = 1;
 
+/** Цвета плиток карты уровня по умолчанию (как DEFAULT_TILES). */
+const DEFAULT_TILE_COLORS: Record<string, string> = { grass: "#5a9e4b", sand: "#d8bf73", water: "#3e7fc1", stone: "#7d808a", wall: "#3c3742", lava: "#e2582c" };
+
+/** Рамка-устройство издалека: корпус, экран и панель — как в DOM (design.css). */
+function drawDevice(ctx: CanvasRenderingContext2D, dev: string, r: Rect, px: number) {
+  const game = dev === "game";
+  const bezel = dev === "phone" ? 11 : dev === "tablet" ? 16 : game ? 8 : 0;
+  const rad = dev === "phone" ? 46 : dev === "tablet" ? 22 : game ? 6 : 10;
+  if (bezel) {
+    rr(ctx, r.x - bezel, r.y - bezel, r.w + bezel * 2, r.h + bezel * 2, rad + bezel);
+    ctx.fillStyle = game ? "#15161b" : "#1c1c21";
+    ctx.fill();
+  }
+  rr(ctx, r.x, r.y, r.w, r.h, rad);
+  ctx.fillStyle = game ? "#0e1117" : "#fbfbfc";
+  ctx.fill();
+  if (!bezel) {
+    ctx.lineWidth = px;
+    ctx.strokeStyle = "rgb(0 0 0 / 0.35)";
+    ctx.stroke();
+  }
+  if (dev === "browser" || dev === "window") {
+    const h = dev === "browser" ? 44 : 34;
+    ctx.save();
+    rr(ctx, r.x, r.y, r.w, r.h, rad);
+    ctx.clip();
+    ctx.fillStyle = dev === "browser" ? "#e8e8ed" : "#f1f1f4";
+    ctx.fillRect(r.x, r.y, r.w, h);
+    if (dev === "browser") {
+      ctx.fillStyle = "#fff";
+      const uw = Math.min(560, r.w - 160);
+      if (uw > 40) {
+        rr(ctx, r.x + (r.w - uw) / 2 - 30, r.y + 8, uw, 28, 8);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+  } else if (dev === "phone") {
+    rr(ctx, r.x + r.w / 2 - 61, r.y + 11, 122, 35, 17.5);
+    ctx.fillStyle = "#050507";
+    ctx.fill();
+  } else if (game) {
+    ctx.lineWidth = Math.max(px, 1.5);
+    ctx.strokeStyle = "rgb(255 255 255 / 0.2)";
+    ctx.strokeRect(r.x + r.w * 0.05, r.y + r.h * 0.05, r.w * 0.9, r.h * 0.9);
+  }
+}
+
 function rr(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
   ctx.beginPath();
   if (r * curZ < 1.5) ctx.rect(x, y, w, h);
@@ -231,6 +279,10 @@ export function drawScene(ctx: CanvasRenderingContext2D, s: BoardStore, view: Sc
     if (!intersects(r, world)) continue;
     const c = palKey(pal, v.props.color);
     ctx.globalAlpha = alphaOf(v);
+    if (v.props.dev) {
+      drawDevice(ctx, v.props.dev, r, px);
+      continue;
+    }
     rr(ctx, r.x, r.y, r.w, r.h, 12);
     ctx.fillStyle = pal.frameFill[c];
     ctx.fill();
@@ -516,6 +568,14 @@ function drawNode(ctx: CanvasRenderingContext2D, s: BoardStore, v: NodeView, pal
     case "token":
     case "words":
     case "spoiler":
+    case "kanban":
+    case "roadmap":
+    case "stats":
+    case "loot":
+    case "curve":
+    case "palette":
+    case "tilemap":
+    case "estimate":
       drawWidget(ctx, v, pal, z, c);
       break;
     case "task":
@@ -1013,6 +1073,175 @@ function drawWidget(ctx: CanvasRenderingContext2D, v: NodeView, pal: Palette, z:
       ctx.lineWidth = Math.max(px, 2);
       ctx.strokeStyle = pal.card;
       ctx.stroke();
+      break;
+    }
+    case "kanban": {
+      bars(ctx, [12], r.x + 14, r.y + 8, r.w * 0.4, 22, r.y + r.h, pal.ink4);
+      const cols = Array.isArray(p.kb) && p.kb.length ? p.kb : [{ id: "a" }, { id: "b" }, { id: "c" }, { id: "d" }];
+      const n = cols.length;
+      const g = 8;
+      const cw = (r.w - 20 - g * (n - 1)) / n;
+      const count = new Map<string, number>();
+      for (const [k, x] of Object.entries(p as Record<string, unknown>))
+        if (k.startsWith("kc:") && x && typeof x === "object") count.set((x as { col: string }).col, (count.get((x as { col: string }).col) ?? 0) + 1);
+      cols.forEach((col, i) => {
+        const x = r.x + 10 + i * (cw + g);
+        rr(ctx, x, r.y + 36, cw, r.h - 46, 8);
+        ctx.fillStyle = pal.surface;
+        ctx.fill();
+        const k = Math.min(count.get(col.id) ?? 0, Math.floor((r.h - 76) / 30));
+        for (let j = 0; j < k; j++) {
+          rr(ctx, x + 5, r.y + 64 + j * 30, cw - 10, 24, 5);
+          ctx.fillStyle = pal.card;
+          ctx.fill();
+        }
+      });
+      break;
+    }
+    case "roadmap": {
+      bars(ctx, [12], r.x + 14, r.y + 8, r.w * 0.4, 22, r.y + r.h, pal.ink4);
+      const n = Math.max(2, Math.min(36, Math.round(p.pn ?? 8)));
+      const x0 = r.x + 12 + 126;
+      const tw = r.w - 24 - 126;
+      const list = Object.entries(p as Record<string, unknown>)
+        .filter(([k, x]) => k.startsWith("rb:") && x && typeof x === "object")
+        .map(([, x]) => x as { s: number; d: number; o: number; c?: string; m?: boolean })
+        .sort((a, q) => a.o - q.o);
+      list.forEach((bar, i) => {
+        const y = r.y + 62 + i * 31;
+        if (y + 26 > r.y + r.h) return;
+        ctx.fillStyle = pal.colors[palKey(pal, bar.c ?? "blue")] ?? accent;
+        if (bar.m) {
+          ctx.beginPath();
+          const mx = x0 + ((bar.s + 0.5) / n) * tw;
+          ctx.moveTo(mx, y + 4);
+          ctx.lineTo(mx + 9, y + 13);
+          ctx.lineTo(mx, y + 22);
+          ctx.lineTo(mx - 9, y + 13);
+          ctx.fill();
+        } else {
+          rr(ctx, x0 + (bar.s / n) * tw, y + 3, Math.max(6, (bar.d / n) * tw), 20, 5);
+          ctx.fill();
+        }
+      });
+      break;
+    }
+    case "stats": {
+      rr(ctx, r.x + 12, r.y + 12, 46, 46, 13);
+      ctx.fillStyle = pal.surface;
+      ctx.fill();
+      bars(ctx, [10], r.x + 70, r.y + 14, r.w - 90, 22, r.y + r.h, pal.ink4);
+      const list = Array.isArray(p.pl) ? p.pl : [];
+      list.slice(0, 8).forEach((st, i) => {
+        const y = r.y + 74 + i * 28;
+        if (y + 12 > r.y + r.h) return;
+        rr(ctx, r.x + 90, y, r.w - 150, 8, 4);
+        ctx.fillStyle = pal.colors[palKey(pal, st.c ?? "blue")] ?? accent;
+        ctx.fill();
+      });
+      break;
+    }
+    case "loot": {
+      bars(ctx, [12], r.x + 14, r.y + 8, r.w * 0.45, 22, r.y + r.h, pal.ink4);
+      const list = Array.isArray(p.lo) ? p.lo : [];
+      list.slice(0, 10).forEach((it, i) => {
+        const y = r.y + 46 + i * 30;
+        if (y + 20 > r.y + r.h - 30) return;
+        ctx.fillStyle = pal.colors[palKey(pal, it.c ?? "gray")] ?? accent;
+        ctx.beginPath();
+        ctx.moveTo(r.x + 24, y + 3);
+        ctx.lineTo(r.x + 31, y + 10);
+        ctx.lineTo(r.x + 24, y + 17);
+        ctx.lineTo(r.x + 17, y + 10);
+        ctx.fill();
+        bars(ctx, [14], r.x + 40, y - 1, r.w - 100, 22, r.y + r.h, pal.ink4);
+      });
+      break;
+    }
+    case "curve": {
+      bars(ctx, [12], r.x + 14, r.y + 8, r.w * 0.4, 22, r.y + r.h, pal.ink4);
+      const x0 = r.x + 44;
+      const y0 = r.y + r.h - 50;
+      const w = r.w - 60;
+      const h = r.h - 96;
+      ctx.lineWidth = px;
+      ctx.strokeStyle = pal.line;
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x0 + w, y0);
+      ctx.stroke();
+      ctx.beginPath();
+      for (let i = 0; i <= 24; i++) {
+        const t = i / 24;
+        const xx = x0 + t * w;
+        const yy = y0 - t ** 1.6 * h;
+        if (i) ctx.lineTo(xx, yy);
+        else ctx.moveTo(xx, yy);
+      }
+      ctx.lineWidth = Math.max(px, 2.4);
+      ctx.strokeStyle = pal.colors[palKey(pal, p.fs?.[0]?.c ?? "violet")] ?? accent;
+      ctx.stroke();
+      break;
+    }
+    case "palette": {
+      const list = (Array.isArray(p.sw) ? p.sw : []).filter((x) => x && isHex(x.hex));
+      const top = p.title ? 36 : 8;
+      const n = Math.max(1, list.length);
+      const sw = (r.w - 16 - (n - 1) * 6) / n;
+      list.forEach((x, i) => {
+        rr(ctx, r.x + 8 + i * (sw + 6), r.y + top, sw, r.h - top - 8, 9);
+        ctx.fillStyle = x.hex;
+        ctx.fill();
+      });
+      break;
+    }
+    case "tilemap": {
+      const W = Math.max(2, Math.min(48, Math.round(p.gw ?? 16)));
+      const H = Math.max(2, Math.min(48, Math.round(p.gh ?? 10)));
+      const cell = Math.min((r.w - 20) / W, (r.h - 70) / H);
+      if (cell <= 0) break;
+      const mx = r.x + (r.w - cell * W) / 2;
+      const my = r.y + 36 + (r.h - 70 - cell * H) / 2;
+      const tiles = Array.isArray(p.tiles) && p.tiles.length ? p.tiles : null;
+      const colorOf = (id: string | undefined) => {
+        const t = tiles?.find((x) => x.id === id);
+        const hex = t ? t.c : DEFAULT_TILE_COLORS[id ?? ""];
+        return hex ? (pal.colors[palKey(pal, hex)] ?? hex) : null;
+      };
+      ctx.fillStyle = colorOf(p.gb) ?? pal.surface;
+      ctx.fillRect(mx, my, cell * W, cell * H);
+      const pad = cell * 0.02;
+      for (const [k, x] of Object.entries(p as Record<string, unknown>)) {
+        if (!k.startsWith("gt:") || typeof x !== "string") continue;
+        const i = k.indexOf(":", 3);
+        const gx = Number(k.slice(3, i));
+        const gy = Number(k.slice(i + 1));
+        if (!(gx >= 0 && gy >= 0 && gx < W && gy < H)) continue;
+        const col = colorOf(x);
+        if (!col) continue;
+        ctx.fillStyle = col;
+        ctx.fillRect(mx + gx * cell - pad, my + gy * cell - pad, cell + pad * 2, cell + pad * 2);
+      }
+      break;
+    }
+    case "estimate": {
+      bars(ctx, [12], r.x + 14, r.y + 8, r.w * 0.45, 22, r.y + r.h, pal.ink4);
+      rr(ctx, r.x + 12, r.y + 40, r.w - 24, 90, 12);
+      ctx.fillStyle = pal.tinted[palKey(pal, "green")] ?? pal.surface;
+      ctx.fill();
+      const votes = Object.keys(p as Record<string, unknown>).filter((k) => k.startsWith("pp:")).length;
+      for (let i = 0; i < Math.min(votes, 8); i++) {
+        rr(ctx, r.x + 24 + i * 44, r.y + 56, 34, 48, 6);
+        ctx.fillStyle = p.on ? pal.card : accent;
+        ctx.fill();
+      }
+      for (let i = 0; i < 7; i++) {
+        const x = r.x + 18 + i * ((r.w - 36) / 7);
+        if (x + 30 > r.x + r.w) break;
+        rr(ctx, x, r.y + r.h - 96, 30, 40, 6);
+        ctx.fillStyle = pal.card;
+        ctx.fill();
+      }
       break;
     }
     case "gate": {
