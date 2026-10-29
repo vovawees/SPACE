@@ -272,6 +272,8 @@ export class BoardStore {
   title = $state("");
   /** Фон доски (пресет из look.svelte.ts) — общий для всех участников. */
   bg = $state("");
+  /** Шрифт доски по умолчанию (id из FONTS) — для объектов без своего шрифта. */
+  font = $state("");
   canUndo = $state(false);
   canRedo = $state(false);
   readonly = $state(false);
@@ -325,6 +327,7 @@ export class BoardStore {
     const readMeta = () => {
       this.title = String(this.meta.get("title") ?? "");
       this.bg = String(this.meta.get("bg") ?? "");
+      this.font = String(this.meta.get("font") ?? "");
     };
     readMeta();
     this.meta.observe(readMeta);
@@ -807,6 +810,11 @@ export class BoardStore {
   setBg(bg: string) {
     if (bg === (this.bg || "graphite")) return;
     this.transact(() => (bg === "graphite" ? this.meta.delete("bg") : this.meta.set("bg", bg)));
+  }
+
+  setFont(font: string) {
+    if (font === (this.font || "sans")) return;
+    this.transact(() => (font === "sans" ? this.meta.delete("font") : this.meta.set("font", font)));
   }
 
   /* ------------------------ переходные правки ------------------------ */

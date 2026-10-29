@@ -365,7 +365,59 @@ async function tpls(p: Page) {
   }
 }
 
+async function fonts(p: Page) {
+  const ids = await ev((b) => {
+    const s = b.store;
+    b.camera.set(0, 0, 1);
+    const a = s.create({ type: "text", x: 60, y: 60, w: 620, h: 70, size: "l", font: "game", tw: "heavy", tt: "up", tls: "wide", tfx: "pop", color: "orange", text: "Уровень 3: Пещеры" });
+    const b2 = s.create({ type: "text", x: 60, y: 170, w: 560, h: 60, size: "l", font: "tech", tfx: "glow", color: "cyan", text: "Неоновый заголовок" });
+    const c = s.create({ type: "shape", x: 60, y: 270, w: 260, h: 140, kind: "rect", fill: "solid", color: "violet", font: "pixel", tfx: "outline", size: "l", text: "GAME OVER" });
+    const d = s.create({ type: "note", x: 360, y: 270, w: 280, h: 160, color: "yellow", ti: true, tlh: "loose", text: "Курсив и свободные строки: заметка дизайнера о том, как должен ощущаться уровень" });
+    const e = s.create({ type: "text", x: 700, y: 60, w: 420, h: 60, size: "l", font: "script", text: "Каллиграфия для истории" });
+    const f = s.create({ type: "text", x: 700, y: 150, w: 420, h: 60, size: "m", tt: "sc", tls: "wider", text: "Капитель вразрядку" });
+    const g = s.create({ type: "note", x: 700, y: 240, w: 260, h: 140, color: "blue", text: "Без своего шрифта — шрифт доски" });
+    const h = s.create({ type: "shape", x: 990, y: 240, w: 220, h: 140, kind: "ellipse", fill: "tint", color: "green", tw: "light", size: "l", text: "Тонкий" });
+    const i = s.create({ type: "text", x: 60, y: 460, w: 700, h: 60, size: "l", font: "marker", tw: "bold", tfx: "shadow", text: "Комикс с тенью!" });
+    return { a, b2, c, d, e, f, g, h, i };
+  });
+  await sleep(1200);
+  await shot("fonts-1");
+  await ev((b) => b.store.setFont("round"));
+  await sleep(600);
+  await shot("fonts-2-boardfont");
+  // инспектор текста
+  await ev((b) => { b.store.selection.set([b.store.order.find((v: any) => v.type === "note" && v.props.color === "blue").id]); b.inspect("props"); });
+  await sleep(700);
+  await shot("fonts-3-inspector");
+  const btn = p.locator(".in-menu").first();
+  if (await btn.count()) {
+    await btn.click();
+    await sleep(500);
+    await shot("fonts-4-menu");
+    await p.keyboard.press("Escape");
+  } else console.log("no .in-menu");
+  await sleep(300);
+  // оформление: наборы
+  await ev((b) => b.inspect("style"));
+  await sleep(600);
+  await shot("fonts-5-style");
+  await ev((b) => { b.ui.inspect = null; b.store.selection.clear(); b.ui.settings = true; });
+  await sleep(700);
+  await p.locator(".dialog button", { hasText: "Вид" }).first().click().catch(() => console.log("no Вид tab"));
+  await sleep(400);
+  await shot("fonts-6-settings");
+  await p.keyboard.press("Escape");
+  await sleep(300);
+  // меню доски → «Шрифт доски»
+  await p.locator('button[aria-label="Меню доски"]').first().click().catch(() => console.log("no board menu"));
+  await sleep(400);
+  const it = p.locator(".menu .item", { hasText: "Шрифт доски" });
+  if (await it.count()) { await it.first().hover(); await sleep(500); }
+  await shot("fonts-7-boardmenu");
+}
+
 try {
+  if (which === "fonts") await fonts(p);
   if (which === "tpls") await tpls(p);
   if (which === "frames") await frames(p);
   if (which === "look") await look(p);

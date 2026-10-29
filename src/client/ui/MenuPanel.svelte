@@ -218,7 +218,7 @@
             {@html entry.iconSvg}
           {/if}
         </span>
-        <span class="label">{entry.label}</span>
+        <span class="label" class:ff={!!entry.font} style:font-family={entry.font} style:font-size-adjust={entry.fontAdj}>{entry.label}</span>
         {#if entry.glyph}
           <!-- образцы строит сам код (headGlyph), пользовательского ввода тут нет -->
           <span class="glyph">{@html entry.glyph}</span>
@@ -315,6 +315,11 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+  /* образец шрифта: крупнее и с запасом по высоте под выносные элементы */
+  .label.ff {
+    font-size: 15px;
+    line-height: 1.35;
   }
   .keys {
     font-size: 11.5px;

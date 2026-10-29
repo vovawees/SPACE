@@ -6,11 +6,15 @@
 export const ACCENTS = [
   { id: "orange", label: "Оранжевый", color: "#f08a4b" },
   { id: "amber", label: "Янтарный", color: "#f2b544" },
+  { id: "sand", label: "Песочный", color: "#d9b58c" },
+  { id: "lime", label: "Лаймовый", color: "#a6d64e" },
   { id: "green", label: "Зелёный", color: "#4fcf88" },
   { id: "cyan", label: "Бирюзовый", color: "#36c3d3" },
   { id: "blue", label: "Синий", color: "#5c9df7" },
+  { id: "indigo", label: "Индиго", color: "#7d86f5" },
   { id: "violet", label: "Фиолетовый", color: "#9f86f8" },
   { id: "pink", label: "Розовый", color: "#ee6fae" },
+  { id: "red", label: "Красный", color: "#ef6461" },
   { id: "white", label: "Белый", color: "#e6e6ec" },
 ] as const;
 export type Accent = (typeof ACCENTS)[number]["id"];
@@ -23,6 +27,10 @@ export const BACKDROPS = [
   { id: "plum", label: "Слива", color: "#120d17", dot: "#dcb4ff" },
   { id: "espresso", label: "Эспрессо", color: "#13100d", dot: "#ffe1be" },
   { id: "slate", label: "Сланец", color: "#15171c", dot: "#ffffff" },
+  { id: "wine", label: "Вино", color: "#160b10", dot: "#ffb4cd" },
+  { id: "olive", label: "Олива", color: "#111209", dot: "#e6eba0" },
+  { id: "space", label: "Космос", color: "#07060f", dot: "#c8b9ff" },
+  { id: "steel", label: "Сталь", color: "#11161d", dot: "#b4d2f0" },
   { id: "black", label: "Чёрный", color: "#050506", dot: "#ffffff" },
 ] as const;
 export type Backdrop = (typeof BACKDROPS)[number]["id"];

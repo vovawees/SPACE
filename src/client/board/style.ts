@@ -34,9 +34,17 @@ export interface NodeStyle {
   tag?: string;
   tagc?: string;
   opacity?: number;
+  /** Начертание текста: толщина, курсив, регистр, межбуквенный и межстрочный интервалы, эффект. */
+  tw?: NodeProps["tw"];
+  ti?: boolean;
+  tt?: NodeProps["tt"];
+  tls?: NodeProps["tls"];
+  tlh?: NodeProps["tlh"];
+  tfx?: NodeProps["tfx"];
 }
 
-export const STYLE_KEYS = ["fc", "fc2", "ga", "tc", "bc", "bw", "bs", "rad", "shd", "fx", "flip", "flt", "tag", "tagc", "opacity", "color", "font"] as const;
+export const TEXT_STYLE_KEYS = ["tw", "ti", "tt", "tls", "tlh", "tfx"] as const;
+export const STYLE_KEYS = ["fc", "fc2", "ga", "tc", "bc", "bw", "bs", "rad", "shd", "fx", "flip", "flt", "tag", "tagc", "opacity", ...TEXT_STYLE_KEYS, "color", "font"] as const;
 
 export const SHADOWS: [Shadow, string][] = [
   ["none", "Нет"],
@@ -69,6 +77,36 @@ export const FILTERS: [Filter | "none", string][] = [
   ["invert", "Негатив"],
   ["blur", "Размытие"],
 ];
+export const WEIGHTS: [string, string][] = [
+  ["light", "Тонкий"],
+  ["", "Обычный"],
+  ["bold", "Жирный"],
+  ["heavy", "Чёрный"],
+];
+export const CASES: [string, string][] = [
+  ["", "Как есть"],
+  ["up", "ПРОПИСНЫЕ"],
+  ["sc", "Капитель"],
+];
+export const SPACINGS: [string, string][] = [
+  ["tight", "Плотно"],
+  ["", "Обычно"],
+  ["wide", "Свободно"],
+  ["wider", "Вразрядку"],
+];
+export const LEADINGS: [string, string][] = [
+  ["tight", "Плотно"],
+  ["", "Обычно"],
+  ["loose", "Свободно"],
+];
+export const TEXT_FX: [string, string][] = [
+  ["", "Нет"],
+  ["shadow", "Тень"],
+  ["outline", "Обводка"],
+  ["glow", "Свечение"],
+  ["pop", "Объём"],
+];
+
 export const BORDERS: [BorderStyle, string][] = [
   ["solid", "Сплошная"],
   ["dashed", "Штрихи"],
@@ -83,6 +121,9 @@ export const canFill = (t: NodeType) => !NO_FILL.has(t);
 export const canBox = (t: NodeType) => !NO_BOX.has(t);
 export const canFlip = (t: NodeType) => t === "image" || t === "sticker" || t === "shape" || t === "ink" || t === "video";
 export const canFilter = (t: NodeType) => t === "image" || t === "video" || t === "sticker" || t === "link";
+/** Где своё начертание текста имеет смысл: свободный текст объекта. */
+const TEXT_STYLE_TYPES = new Set<NodeType>(["note", "text", "shape", "path", "frame"]);
+export const canTextStyle = (t: NodeType) => TEXT_STYLE_TYPES.has(t);
 
 export interface Preset {
   id: string;
@@ -102,6 +143,11 @@ export const PRESETS: Preset[] = [
   { id: "gold", label: "Золото", style: { fc: "#fde68a", fc2: "#f59e0b", ga: 160, tc: "#3f2a00", bc: "#b45309", bw: 1, shd: "glow", rad: 14 } },
   { id: "candy", label: "Леденец", style: { fc: "#fbcfe8", fc2: "#c4b5fd", ga: 90, tc: "#3b0764", bw: 0, shd: "s", rad: 26 } },
   { id: "matrix", label: "Матрица", style: { fc: "#02140a", tc: "#4ade80", bc: "#16a34a", bw: 1, shd: "glow", rad: 6, font: "mono" } as NodeStyle },
+  { id: "arcade", label: "Аркада", style: { fc: "#120a2a", fc2: "#2b0f4a", ga: 180, tc: "#fef08a", bc: "#f472b6", bw: 2, shd: "neon", rad: 4, font: "pixel", tt: "up", tfx: "pop" } as NodeStyle },
+  { id: "scroll", label: "Свиток", style: { fc: "#f3e3bf", fc2: "#e2c48e", ga: 180, tc: "#4a2f12", bc: "#9a6b34", bw: 2, bs: "double", shd: "m", rad: 6, font: "old" } as NodeStyle },
+  { id: "comic", label: "Комикс", style: { fc: "#fde047", tc: "#111111", bc: "#111111", bw: 3, shd: "l", rad: 8, font: "marker", tw: "bold", tfx: "shadow" } as NodeStyle },
+  { id: "title", label: "Заголовок", style: { fc: "#18181b", tc: "#fafafa", bw: 0, shd: "m", rad: 10, tw: "heavy", tt: "up", tls: "wide" } as NodeStyle },
+  { id: "hologram", label: "Голограмма", style: { fc: "#0b1d2b", fc2: "#1b0b2e", ga: 120, tc: "#a5f3fc", bc: "#67e8f9", bw: 1, shd: "glow", rad: 14, font: "tech", tfx: "glow", tls: "wide" } as NodeStyle },
 ];
 
 const css = (c: string | undefined) => (!c ? "" : c === "transparent" ? "transparent" : colorCss(c));
@@ -139,6 +185,13 @@ export function styleOf(p: NodeProps): { cls: string; vars: string } {
   if (p.fx && p.fx !== "none") cls.push(`fx-${p.fx}`);
   if (p.flip) cls.push(`flip-${p.flip}`);
   if (p.flt) cls.push(`flt-${p.flt}`);
+  // начертание текста — классы, правила в custom.css
+  if (p.tw) cls.push(`tw-${p.tw}`);
+  if (p.ti) cls.push("ti");
+  if (p.tt) cls.push(`tt-${p.tt}`);
+  if (p.tls) cls.push(`tls-${p.tls}`);
+  if (p.tlh) cls.push(`tlh-${p.tlh}`);
+  if (p.tfx) cls.push(`tfx-${p.tfx}`);
   return { cls: cls.join(" "), vars: vars.join(";") };
 }
 

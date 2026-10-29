@@ -26,7 +26,8 @@ import { ask } from "../../ui/confirm.svelte.ts";
 import { menu } from "../../ui/menu.svelte.ts";
 import type { Board } from "../board.svelte.ts";
 import { downloadShelf, fileUrl } from "../files.ts";
-import { DASHES, FILLS, HEAD_SIZES, SIZES, TEXT_SIZES, reversePath, setRoute } from "../menus.ts";
+import { DASHES, FILLS, HEAD_SIZES, SIZES, TEXT_SIZES, fontItems, reversePath, setRoute } from "../menus.ts";
+import { CASES, LEADINGS, SPACINGS, TEXT_FX, WEIGHTS, canTextStyle } from "../style.ts";
 import {
   CALC_LABELS,
   CODE_LANGS,
@@ -35,6 +36,7 @@ import {
   FONTS,
   FONT_TYPES,
   GATE_LABELS,
+  fontOf,
   HEADS,
   HEAD_LABELS,
   PREVIEW_LANGS,
@@ -1271,13 +1273,37 @@ function textSection(c: Ctx): Section | null {
   const fonts = views.every((x) => FONT_TYPES.has(x.type));
   const sized = views.every((x) => x.type === "note" || x.type === "text" || x.type === "shape" || (x.type === "path" && x.textValue.trim() !== ""));
   const aligned = views.every((x) => x.type === "note" || x.type === "text" || x.type === "shape");
-  if (!fonts && !sized) return null;
+  const styled = views.every((x) => canTextStyle(x.type));
+  if (!fonts && !sized && !styled) return null;
+  const lines = views.some((x) => x.type === "note" || x.type === "text" || x.type === "shape");
   const fields = [
+    fonts && fontField(c),
     sized && f.seg("size", "Размер", TEXT_OPTS, views[0]!.type === "path" ? "s" : "m"),
     aligned && f.seg("align", "Выравнивание", ALIGN_OPTS, "left"),
-    fonts && f.seg("font", "Шрифт", FONTS.map((x) => [x.id, x.label] as Opt), "sans", "select"),
+    styled && f.seg("tw", "Толщина", WEIGHTS, ""),
+    styled && f.tog("ti", "Курсив"),
+    styled && f.seg("tt", "Регистр", CASES, ""),
+    styled && f.seg("tls", "Между буквами", SPACINGS, ""),
+    styled && lines && f.seg("tlh", "Между строками", LEADINGS, ""),
+    styled && f.seg("tfx", "Эффект текста", TEXT_FX, "", "chips"),
   ].filter(Boolean) as Field[];
   return fields.length ? { id: "text", title: "Текст", fields } : null;
+}
+
+/** Шрифт с образцами по группам; без своего — шрифт доски. */
+function fontField(c: Ctx): Field {
+  return {
+    k: "menu",
+    key: "font",
+    label: "Шрифт",
+    get: () => {
+      const board = c.b.view.font;
+      const own = c.v.props.font;
+      const fo = fontOf(own ?? board) ?? FONTS[0]!;
+      return { text: !own && board && board !== "sans" ? `${fo.label} · как у доски` : fo.label, font: fo.css, adj: fo.adj };
+    },
+    items: () => fontItems(c.views, c.put, c.b.view.font),
+  };
 }
 
 function geometrySection(c: Ctx): Section | null {

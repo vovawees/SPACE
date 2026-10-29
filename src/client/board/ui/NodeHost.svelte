@@ -4,7 +4,7 @@
      сами меряют высоту; в документ её пишет только тот, кто правил. */
   import type { Component } from "svelte";
   import { useBoard } from "../board.svelte.ts";
-  import { colorCss, colorKey, fontCss, fontOf, type NodeType } from "../model.ts";
+  import { FONT_TYPES, colorCss, colorKey, fontCss, fontOf, type NodeType } from "../model.ts";
   import CodeNode from "../nodes/CodeNode.svelte";
   import FileNode from "../nodes/FileNode.svelte";
   import FrameNode from "../nodes/FrameNode.svelte";
@@ -154,8 +154,10 @@
   const op = $derived(typeof v.props.opacity === "number" ? Math.max(0.1, Math.min(1, v.props.opacity)) : 1);
   const look = $derived(styleOf(v.props));
   // свой шрифт узла — переменной: подписи интерфейса внутри остаются обычными
-  const nf = $derived(fontCss(v.props.font));
-  const nfa = $derived(nf ? (fontOf(v.props.font)?.adj ?? null) : null);
+  // без своего шрифта — шрифт доски (там, где выбор шрифта имеет смысл)
+  const fid = $derived(v.props.font ?? (s.font && FONT_TYPES.has(v.type) ? s.font : undefined));
+  const nf = $derived(fontCss(fid));
+  const nfa = $derived(nf ? (fontOf(fid)?.adj ?? null) : null);
   // спрятан логикой: участникам не виден, редакторам — призраком
   const hid = $derived(!!v.props.hid);
   const gone = $derived(hid && b.readonly);
@@ -182,7 +184,7 @@
 
 <div
   bind:this={el}
-  class="node t-{v.type}{nf ? ` ff f-${v.props.font}` : ''}{look.cls ? ` ${look.cls}` : ''}"
+  class="node t-{v.type}{nf ? ` ff f-${fid}` : ''}{look.cls ? ` ${look.cls}` : ''}"
   class:sel
   class:editing
   class:fit={v.fit}

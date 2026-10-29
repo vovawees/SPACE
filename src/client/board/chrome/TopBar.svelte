@@ -1,4 +1,5 @@
 <script lang="ts">
+  import CaseSensitive from "@lucide/svelte/icons/case-sensitive";
   import { MediaQuery } from "svelte/reactivity";
   import { ask } from "../../ui/confirm.svelte.ts";
   /* Верхняя панель: домой, название, связь; справа — люди, доступ, история, меню. */
@@ -31,7 +32,7 @@
   import { menu, type MenuEntry } from "../../ui/menu.svelte.ts";
   import { tip } from "../../ui/tooltip.ts";
   import { useBoard } from "../board.svelte.ts";
-  import { backdropItems } from "../menus.ts";
+  import { backdropItems, boardFontItems } from "../menus.ts";
   import { REACTIONS } from "../social.svelte.ts";
 
   const b = useBoard();
@@ -198,6 +199,7 @@
         icon: Palette,
         items: backdropItems(b),
       },
+      { label: "Шрифт доски", icon: CaseSensitive, items: boardFontItems(b) },
       { label: "Горячие клавиши", icon: Keyboard, keys: "?", run: () => (b.ui.shortcuts = true) },
       { label: "Настройки", icon: Settings, run: () => (b.ui.settings = true) },
       "-",

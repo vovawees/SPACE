@@ -58,6 +58,7 @@
   import ToggleRight from "@lucide/svelte/icons/toggle-right";
   import SlidersHorizontal from "@lucide/svelte/icons/sliders-horizontal";
   import Star from "@lucide/svelte/icons/star";
+  import CaseSensitive from "@lucide/svelte/icons/case-sensitive";
   import Clock from "@lucide/svelte/icons/clock";
   import Hourglass from "@lucide/svelte/icons/hourglass";
   import ChartColumn from "@lucide/svelte/icons/chart-column";
@@ -82,7 +83,7 @@
   import { typeIcon } from "../typeInfo.ts";
   import { addFiles } from "../files.ts";
   import { pickFiles } from "../menus.ts";
-  import { TYPE_LABELS, type NodeType } from "../model.ts";
+  import { FONTS, TYPE_LABELS, type NodeType } from "../model.ts";
   import { duplicate, removeSelected, tidy, wrapInFrame, zoomToFit, zoomToSelection } from "../ops.ts";
   import type { NodeView } from "../store.svelte.ts";
   import { tableText } from "../nodes/table.svelte.ts";
@@ -195,6 +196,15 @@
       words: "фон цвет оформление тема",
       when: () => ro() && (b.store.bg || "graphite") !== d.id,
       run: () => b.store.setBg(d.id),
+    })),
+    ...FONTS.map((f) => ({
+      id: "font:" + f.id,
+      label: `Шрифт доски: ${f.label}`,
+      icon: CaseSensitive,
+      group: "Вид",
+      words: "шрифт доски текст оформление",
+      when: () => ro() && (b.store.font || "sans") !== f.id,
+      run: () => b.store.setFont(f.id),
     })),
     ...ACCENTS.map((a) => ({
       id: "accent:" + a.id,

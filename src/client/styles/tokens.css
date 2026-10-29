@@ -122,6 +122,22 @@
   --accent: #ee6fae;
   --accent-ink: #23061a;
 }
+[data-accent="sand"] {
+  --accent: #d9b58c;
+  --accent-ink: #1f1409;
+}
+[data-accent="lime"] {
+  --accent: #a6d64e;
+  --accent-ink: #121a03;
+}
+[data-accent="indigo"] {
+  --accent: #7d86f5;
+  --accent-ink: #0b0d2a;
+}
+[data-accent="red"] {
+  --accent: #ef6461;
+  --accent-ink: #220606;
+}
 [data-accent="white"] {
   --accent: #e6e6ec;
   --accent-ink: #121215;
@@ -162,6 +178,30 @@
   --bg: #15171c;
   --bg-dot: rgb(255 255 255 / 0.08);
   --bg-dot-strong: rgb(255 255 255 / 0.14);
+}
+[data-bg="wine"] {
+  --bg: #160b10;
+  --bg-dot: rgb(255 180 205 / 0.08);
+  --bg-dot-strong: rgb(255 180 205 / 0.14);
+  --glow: 255 160 195;
+}
+[data-bg="olive"] {
+  --bg: #111209;
+  --bg-dot: rgb(230 235 160 / 0.075);
+  --bg-dot-strong: rgb(230 235 160 / 0.13);
+  --glow: 225 235 150;
+}
+[data-bg="space"] {
+  --bg: #07060f;
+  --bg-dot: rgb(200 185 255 / 0.085);
+  --bg-dot-strong: rgb(200 185 255 / 0.15);
+  --glow: 185 165 255;
+}
+[data-bg="steel"] {
+  --bg: #11161d;
+  --bg-dot: rgb(180 210 240 / 0.08);
+  --bg-dot-strong: rgb(180 210 240 / 0.14);
+  --glow: 170 205 240;
 }
 [data-bg="black"] {
   --bg: #050506;

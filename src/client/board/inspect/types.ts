@@ -2,6 +2,7 @@
    Поля — простые объекты с get/set: панель сама рисует подходящий
    элемент, а запись идёт сразу во все выделенные объекты. */
 import type { Component } from "svelte";
+import type { MenuEntry } from "../../ui/menu.svelte.ts";
 
 export type IconComp = Component<Record<string, unknown>>;
 export type Opt = [value: string, label: string];
@@ -59,6 +60,8 @@ export type Field =
   | (Base & { k: "seg"; opts: Opt[]; get: () => string; set: (v: string) => void })
   | (Base & { k: "chips"; opts: Opt[]; get: () => string | null; set: (v: string) => void; more?: Btn })
   | (Base & { k: "select"; opts: Opt[]; get: () => string; set: (v: string) => void })
+  /** Кнопка-выбор с выпадающим меню (например, шрифт с образцами). */
+  | (Base & { k: "menu"; get: () => { text: string; font?: string; adj?: number }; items: () => MenuEntry[] })
   | (Base & { k: "dur"; get: () => number; set: (ms: number) => void; presets?: number[]; min?: number })
   | (Base & { k: "when"; get: () => number | null; set: (ms: number | null) => void; presets?: [string, () => number][] })
   | (Base & { k: "date"; get: () => string | null; set: (iso: string | null) => void })

@@ -361,3 +361,83 @@
   letter-spacing: 0.04em;
   pointer-events: none;
 }
+
+/* ------------------- начертание текста (tw/ti/tt/tls/tlh/tfx) -------------------
+   Действует на свободный текст объекта: заметка, текст, подпись фигуры,
+   стрелки и рамки. Подписи интерфейса внутри объектов не меняются. */
+.node.tw-light :is(.note-body, .text-body, .shape-label, .path-label:not(.path-logic), .frame-label) {
+  font-weight: 300;
+}
+.node.tw-bold :is(.note-body, .text-body, .shape-label, .path-label:not(.path-logic), .frame-label) {
+  font-weight: 700;
+}
+.node.tw-heavy :is(.note-body, .text-body, .shape-label, .path-label:not(.path-logic), .frame-label) {
+  font-weight: 900;
+}
+.node.ti :is(.note-body, .text-body, .shape-label, .path-label:not(.path-logic), .frame-label) {
+  font-style: italic;
+}
+.node.tt-up :is(.note-body, .text-body, .shape-label, .path-label:not(.path-logic), .frame-label) {
+  text-transform: uppercase;
+}
+.node.tt-sc :is(.note-body, .text-body, .shape-label, .path-label:not(.path-logic), .frame-label) {
+  font-variant-caps: all-small-caps;
+}
+.node.tls-tight :is(.note-body, .text-body, .shape-label, .path-label:not(.path-logic), .frame-label) {
+  letter-spacing: -0.035em;
+}
+.node.tls-wide :is(.note-body, .text-body, .shape-label, .path-label:not(.path-logic), .frame-label) {
+  letter-spacing: 0.07em;
+}
+.node.tls-wider :is(.note-body, .text-body, .shape-label, .path-label:not(.path-logic), .frame-label) {
+  letter-spacing: 0.2em;
+}
+.node.tlh-tight :is(.note-body, .text-body, .shape-label) {
+  line-height: 1.1;
+}
+.node.tlh-loose :is(.note-body, .text-body, .shape-label) {
+  line-height: 1.9;
+}
+/* эффекты текста: размеры в em — одинаково на любом размере шрифта */
+.node.tfx-shadow :is(.note-body, .text-body, .shape-label, .path-label:not(.path-logic), .frame-label) {
+  text-shadow:
+    0 0.05em 0 rgb(0 0 0 / 0.45),
+    0 0.12em 0.3em rgb(0 0 0 / 0.4);
+}
+.node.tfx-outline :is(.note-body, .text-body, .shape-label, .path-label:not(.path-logic), .frame-label) {
+  --to: 0.055em;
+  --toc: var(--bc, rgb(8 8 10 / 0.92));
+  text-shadow:
+    var(--to) 0 0 var(--toc),
+    calc(var(--to) * -1) 0 0 var(--toc),
+    0 var(--to) 0 var(--toc),
+    0 calc(var(--to) * -1) 0 var(--toc),
+    calc(var(--to) * 0.7) calc(var(--to) * 0.7) 0 var(--toc),
+    calc(var(--to) * -0.7) calc(var(--to) * 0.7) 0 var(--toc),
+    calc(var(--to) * 0.7) calc(var(--to) * -0.7) 0 var(--toc),
+    calc(var(--to) * -0.7) calc(var(--to) * -0.7) 0 var(--toc);
+}
+.node.tfx-glow :is(.note-body, .text-body, .shape-label, .path-label:not(.path-logic), .frame-label) {
+  text-shadow:
+    0 0 0.12em color-mix(in oklab, currentColor 80%, transparent),
+    0 0 0.45em color-mix(in oklab, currentColor 55%, transparent),
+    0 0 1.1em color-mix(in oklab, currentColor 35%, transparent);
+}
+.node.tfx-pop :is(.note-body, .text-body, .shape-label, .path-label:not(.path-logic), .frame-label) {
+  --toc: var(--bc, color-mix(in oklab, currentColor 30%, black));
+  text-shadow:
+    0.03em 0.03em 0 var(--toc),
+    0.06em 0.06em 0 var(--toc),
+    0.09em 0.09em 0 var(--toc),
+    0.12em 0.12em 0.08em rgb(0 0 0 / 0.45);
+}
+
+/* цвет обводки и объёма — от яркости самого текста: к тёмному светлая, к светлому тёмная */
+@supports (color: oklch(from currentColor l c h)) {
+  .node.tfx-outline :is(.note-body, .text-body, .shape-label, .path-label:not(.path-logic), .frame-label) {
+    --toc: var(--bc, oklch(from currentColor clamp(0, (0.6 - l) * 100, 1) 0 0 / 0.92));
+  }
+  .node.tfx-pop :is(.note-body, .text-body, .shape-label, .path-label:not(.path-logic), .frame-label) {
+    --toc: var(--bc, oklch(from currentColor calc(l * 0.4 + clamp(0, (0.6 - l) * 100, 1) * (0.55 + l * 0.6)) c h));
+  }
+}

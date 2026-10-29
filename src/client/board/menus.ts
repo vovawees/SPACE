@@ -10,6 +10,7 @@ import AlignStartVertical from "@lucide/svelte/icons/align-start-vertical";
 import AlignVerticalDistributeCenter from "@lucide/svelte/icons/align-vertical-distribute-center";
 import ArrowDown from "@lucide/svelte/icons/arrow-down";
 import Blend from "@lucide/svelte/icons/blend";
+import Bold from "@lucide/svelte/icons/bold";
 import CaseSensitive from "@lucide/svelte/icons/case-sensitive";
 import ArrowDownToLine from "@lucide/svelte/icons/arrow-down-to-line";
 import ArrowLeftRight from "@lucide/svelte/icons/arrow-left-right";
@@ -60,7 +61,7 @@ import Paintbrush from "@lucide/svelte/icons/paintbrush";
 import Settings2 from "@lucide/svelte/icons/settings-2";
 import Zap from "@lucide/svelte/icons/zap";
 import { canLogic } from "./logic.svelte.ts";
-import { copyStyle, copiedStyle, hasStyle, pasteStyle, resetStyle } from "./style.ts";
+import { TEXT_FX, canTextStyle, copyStyle, copiedStyle, hasStyle, pasteStyle, resetStyle } from "./style.ts";
 import { session } from "../lib/session.svelte.ts";
 import { BACKDROPS, backdropGlyph } from "../lib/look.svelte.ts";
 import { EMOJI_GROUPS } from "./library.ts";
@@ -81,6 +82,7 @@ import {
   CODE_LANGS,
   COLOR_ITEMS,
   FONTS,
+  FONT_GROUPS,
   FONT_TYPES,
   HEADS,
   HEAD_LABELS,
@@ -90,7 +92,9 @@ import {
   SHAPE_KINDS,
   TEXT_TYPES,
   WIDGET_TYPES,
+  fontOf,
   type Dash,
+  type FontName,
   type Fill,
   type Head,
   type HeadSize,
@@ -235,9 +239,45 @@ export function opacityItems(views: NodeView[], set: (p: Partial<NodeData>) => v
   return [100, 80, 60, 40, 20].map((n) => ({ label: n === 100 ? "Непрозрачный" : `${n} %`, checked: cur === n, run: () => set({ opacity: n === 100 ? undefined : n / 100 }) }));
 }
 
-export function fontItems(views: NodeView[], set: (p: Partial<NodeData>) => void): MenuEntry[] {
-  const cur = same(views.filter((v) => FONT_TYPES.has(v.type)).map((v) => v.props.font ?? "sans"));
-  return FONTS.map((f) => ({ label: f.label, checked: cur === f.id, run: () => set({ font: f.id === "sans" ? undefined : f.id }) }));
+/** Шрифты по группам, подписи — образцы своим шрифтом. */
+function fontList(cur: string | undefined, pick: (id: FontName) => void, disabled = false): MenuEntry[] {
+  return FONT_GROUPS.flatMap((g) => [
+    { heading: g },
+    ...FONTS.filter((f) => f.group === g).map((f) => ({ label: f.label, font: f.css, fontAdj: f.adj, checked: cur === f.id, disabled, run: () => pick(f.id) })),
+  ]);
+}
+
+/** Шрифт объектов; board — шрифт доски: без своего шрифта объект берёт его. */
+export function fontItems(views: NodeView[], set: (p: Partial<NodeData>) => void, board = ""): MenuEntry[] {
+  const bf = board && board !== "sans" ? fontOf(board) : undefined;
+  const cur = same(views.filter((v) => FONT_TYPES.has(v.type)).map((v) => v.props.font ?? (bf ? "" : "sans")));
+  const list = fontList(cur, (id) => set({ font: id === "sans" && !bf ? undefined : id }));
+  return bf ? [{ label: `Как у доски · ${bf.label}`, font: bf.css, fontAdj: bf.adj, checked: cur === "", run: () => set({ font: undefined }) }, "-", ...list] : list;
+}
+
+/** Шрифт доски — общий для всех участников, для объектов без своего шрифта. */
+export function boardFontItems(b: Board): MenuEntry[] {
+  return fontList(b.store.font || "sans", (id) => b.store.setFont(id), b.readonly);
+}
+
+/** Начертание текста: жирный, курсив, прописные — переключатели для контекстной панели. */
+export function textStyleItems(views: NodeView[], set: (p: Partial<NodeData>) => void): MenuEntry[] {
+  const list = views.filter((v) => canTextStyle(v.type));
+  if (!list.length) return [];
+  const all = (f: (v: NodeView) => boolean) => list.every(f);
+  const bold = all((v) => v.props.tw === "bold" || v.props.tw === "heavy");
+  const it = all((v) => !!v.props.ti);
+  const up = all((v) => v.props.tt === "up");
+  const put = set;
+  return [
+    { label: "Жирный", checked: bold, keys: "Mod+B", run: () => put({ tw: bold ? undefined : "bold" }) },
+    { label: "Курсив", checked: it, keys: "Mod+I", run: () => put({ ti: it ? undefined : true }) },
+    { label: "ПРОПИСНЫЕ", checked: up, run: () => put({ tt: up ? undefined : "up" }) },
+    {
+      label: "Эффект текста",
+      items: TEXT_FX.map(([x, l]) => ({ label: l, checked: same(list.map((v) => v.props.tfx ?? "")) === x, run: () => put({ tfx: (x || undefined) as NodeData["tfx"] }) })),
+    },
+  ];
 }
 
 export function nodeMenu(b: Board, ix: Interact): MenuEntry[] {
@@ -287,7 +327,8 @@ export function nodeMenu(b: Board, ix: Interact): MenuEntry[] {
         ],
       },
     !ro && one?.type === "path" && canLogic(s, one) && { label: one.props.lg ? "Логика стрелки…" : "Добавить логику…", icon: Zap, run: () => b.inspect("logic", { arrow: one.id }) },
-    !ro && views.some((v) => FONT_TYPES.has(v.type)) && { label: "Шрифт", icon: CaseSensitive, items: fontItems(views, set) },
+    !ro && views.some((v) => FONT_TYPES.has(v.type)) && { label: "Шрифт", icon: CaseSensitive, items: fontItems(views, set, b.store.font) },
+    !ro && views.some((v) => canTextStyle(v.type)) && { label: "Начертание", icon: Bold, items: textStyleItems(views, set) },
     !ro && {
       label: "Порядок",
       icon: Layers,
@@ -567,6 +608,7 @@ export function canvasMenu(b: Board, ix: Interact, at: Pt): MenuEntry[] {
       items: [toggle("Сетка", "grid"), toggle("Прилипание", "snap"), toggle("Свечение под группами", "glow"), toggle("Мини-карта", "minimap")],
     },
     { label: "Фон доски", icon: PaletteIcon, items: backdropItems(b) },
+    { label: "Шрифт доски", icon: CaseSensitive, items: boardFontItems(b) },
     { label: "Горячие клавиши", icon: Keyboard, keys: "?", run: () => (b.ui.shortcuts = true) },
   ]);
 }

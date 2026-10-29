@@ -296,7 +296,10 @@
   }
   .accents {
     display: flex;
-    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 7px;
+    max-width: 190px;
   }
   .acc {
     width: 22px;

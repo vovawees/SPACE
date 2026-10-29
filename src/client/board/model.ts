@@ -323,6 +323,13 @@ export interface NodeProps {
   // прозрачность 0.1..1 и шрифт текста
   opacity?: number;
   font?: FontName;
+  // начертание текста (см. style.ts): толщина, курсив, регистр, интервалы, эффект
+  tw?: "light" | "bold" | "heavy";
+  ti?: boolean;
+  tt?: "up" | "sc";
+  tls?: "tight" | "wide" | "wider";
+  tlh?: "tight" | "loose";
+  tfx?: "shadow" | "outline" | "glow" | "pop";
   // оформление (см. style.ts)
   fc?: string;
   fc2?: string;
@@ -606,6 +613,7 @@ export type FontName =
   | "script"
   | "marker";
 export type FontGroup = "Без засечек" | "С засечками" | "Акцентные" | "Рукописные";
+export const FONT_GROUPS: FontGroup[] = ["Без засечек", "С засечками", "Акцентные", "Рукописные"];
 /** Шрифты узлов: css — семейство, adj — font-size-adjust для мелких по высоте строчных. */
 export const FONTS: { id: FontName; label: string; css: string; group: FontGroup; adj?: number }[] = [
   { id: "sans", label: "Обычный", css: "var(--font-ui)", group: "Без засечек" },

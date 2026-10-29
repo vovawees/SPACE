@@ -45,7 +45,7 @@
   import { useBoard } from "../board.svelte.ts";
   import { downloadShelf, fileUrl } from "../files.ts";
   import { headGlyph, routeOf } from "../connector.ts";
-  import { DASHES, FILLS, HEAD_SIZES, ROUTES, SIZES, TEXT_SIZES, choice, fontItems, headChoice, langItems, nodeMenu, reversePath, setRoute, stickerItems } from "../menus.ts";
+  import { DASHES, FILLS, HEAD_SIZES, ROUTES, SIZES, TEXT_SIZES, choice, fontItems, headChoice, langItems, nodeMenu, reversePath, setRoute, stickerItems, textStyleItems } from "../menus.ts";
   import { PRIO_CSS, assigneeItems, counterItems, diceItems, dueItems, loadMembers, prioItems, progressItems, resetVotes, tableItems, timerItems, timerShort, toggleDone } from "../nodes/actions.ts";
   import { counterReset, counterSet, counterValue, diceCount, diceSides, rollDice } from "../nodes/games.ts";
   import { votesOf } from "../nodes/poll.ts";
@@ -180,10 +180,12 @@
 
   function sizeMenu(e: MouseEvent) {
     const fonts = views.some((v) => FONT_TYPES.has(v.type));
+    const styled = textStyleItems(views, set);
     drop(e, [
       { heading: allLabels ? "Размер подписи" : "Размер текста" },
       ...choice(TEXT_SIZES, sizeVal, (size) => set({ size })),
-      ...(fonts ? ["-" as const, { heading: "Шрифт" }, ...fontItems(views, set)] : []),
+      ...(fonts ? ["-" as const, { label: "Шрифт", items: fontItems(views, set, s.font) }] : []),
+      ...(styled.length ? ["-" as const, { heading: "Начертание" }, ...styled] : []),
     ]);
   }
 

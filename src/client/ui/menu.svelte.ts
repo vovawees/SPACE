@@ -10,6 +10,10 @@ export interface MenuItem {
   /** SVG-значок слева вместо icon (например, контур фигуры). */
   iconSvg?: string;
   keys?: string;
+  /** Подпись своим шрифтом (CSS-семейство) — образец в выборе шрифта. */
+  font?: string;
+  /** font-size-adjust для образца (у рукописных строчные мелкие). */
+  fontAdj?: number;
   run?: () => void;
   items?: MenuEntry[];
   checked?: boolean;

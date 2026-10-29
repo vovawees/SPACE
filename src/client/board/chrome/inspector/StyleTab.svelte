@@ -9,9 +9,9 @@
   import { hexToRgb, hsvToHex, rgbToHsv } from "../../../lib/color.ts";
   import { pickColor } from "../../../ui/colorpick.svelte.ts";
   import { useBoard } from "../../board.svelte.ts";
-  import { COLORS, colorCss, isHex, type NodeData, type NodeProps, type NodeType } from "../../model.ts";
+  import { COLORS, colorCss, fontOf, isHex, type NodeData, type NodeProps, type NodeType } from "../../model.ts";
   import type { NodeView } from "../../store.svelte.ts";
-  import { BORDERS, EFFECTS, FILTERS, PRESETS, SHADOWS, canBox, canFill, canFilter, canFlip, copiedStyle, copyStyle, pasteStyle, resetStyle, type BorderStyle, type Preset, type Shadow } from "../../style.ts";
+  import { BORDERS, EFFECTS, FILTERS, PRESETS, SHADOWS, TEXT_STYLE_KEYS, canBox, canFill, canFilter, canFlip, copiedStyle, copyStyle, pasteStyle, resetStyle, type BorderStyle, type Preset, type Shadow } from "../../style.ts";
   import ColorDots from "./ColorDots.svelte";
 
   let { views }: { views: NodeView[] } = $props();
@@ -101,11 +101,16 @@
   /* ------------------------------ наборы ------------------------------ */
 
   const LOOK_KEYS = ["fc", "fc2", "ga", "tc", "bc", "bw", "bs", "rad", "shd"] as const;
+  const ALL_KEYS = [...LOOK_KEYS, ...TEXT_STYLE_KEYS, "font"] as const;
   function applyPreset(pr: Preset) {
+    const st = pr.style as Record<string, unknown>;
+    const cur = p as Record<string, unknown>;
     const patch: Record<string, unknown> = {};
-    for (const k of LOOK_KEYS) patch[k] = (pr.style as Record<string, unknown>)[k] ?? undefined;
-    const font = (pr.style as { font?: string }).font;
-    if (font) patch.font = font;
+    for (const k of LOOK_KEYS) patch[k] = st[k] ?? undefined;
+    // текст оформлен другим набором — заменяем и его, иначе своё начертание не трогаем
+    const fromPreset = PRESETS.some((x) => ALL_KEYS.every((k) => (x.style as Record<string, unknown>)[k] === cur[k]));
+    if (fromPreset || TEXT_STYLE_KEYS.some((k) => st[k] !== undefined)) for (const k of TEXT_STYLE_KEYS) patch[k] = st[k] ?? undefined;
+    if (st.font !== undefined || (fromPreset && cur.font !== undefined)) patch.font = st.font ?? undefined;
     set(patch as Partial<NodeData>);
   }
   const previewBg = (pr: Preset) => {
@@ -160,6 +165,7 @@
                 style:--pv-bc={pr.style.bc ? colorCss(pr.style.bc) : "transparent"}
                 style:--pv-bs={pr.style.bs ?? "solid"}
                 style:--pv-r="{Math.min(12, pr.style.rad ?? 8)}px"
+                style:--pv-ff={fontOf((pr.style as { font?: string }).font)?.css ?? null}
               >
                 <span class="pv">Aa</span>
                 <span class="pl">{pr.label}</span>
@@ -474,6 +480,7 @@
     background-image: var(--pv-bg);
     color: var(--pv-tc, var(--ink));
     border: 1.5px var(--pv-bs) var(--pv-bc);
+    font-family: var(--pv-ff, inherit);
     font-size: 12px;
     font-weight: 650;
     box-shadow: var(--shadow-1);

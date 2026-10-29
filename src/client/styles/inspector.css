@@ -230,6 +230,26 @@
 .in-select {
   padding-right: 4px;
 }
+/* выбор с меню: значение своим шрифтом и стрелка справа */
+.in-menu {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+.in-menu > span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 14px;
+}
+.in-menu > svg {
+  flex: none;
+  color: var(--ink-3);
+}
 .in-line {
   display: flex;
   align-items: center;

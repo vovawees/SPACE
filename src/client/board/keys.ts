@@ -1,7 +1,7 @@
 /* Клавиатура. Сочетания читаются по физической клавише (e.code), а не по
    символу: на русской раскладке Ctrl+Z приходит как «я», и без этого
    отмена и все горячие клавиши молча не работали бы. */
-import { copyStyle, pasteStyle } from "./style.ts";
+import { canTextStyle, copyStyle, pasteStyle } from "./style.ts";
 import { RUN_LANGS, runs } from "./run.svelte.ts";
 import { session } from "../lib/session.svelte.ts";
 import { toasts } from "../lib/toast.svelte.ts";
@@ -139,6 +139,21 @@ export function attachKeys(b: Board): () => void {
             st.updateMany(sel.list.map((id) => [id, { locked: lock || undefined }]));
           }
           return;
+        // начертание выделенного текста: Ctrl+B — жирный, Ctrl+I — курсив
+        case "KeyB":
+        case "KeyI": {
+          const list = st.selected().filter((v) => canTextStyle(v.type));
+          if (b.readonly || !list.length) return;
+          e.preventDefault();
+          if (code === "KeyB") {
+            const on = list.every((v) => v.props.tw === "bold" || v.props.tw === "heavy");
+            st.updateMany(list.map((v) => [v.id, { tw: on ? undefined : "bold" }]));
+          } else {
+            const on = list.every((v) => !!v.props.ti);
+            st.updateMany(list.map((v) => [v.id, { ti: on ? undefined : true }]));
+          }
+          return;
+        }
         case "BracketRight":
           e.preventDefault();
           if (!b.readonly) st.reorder(sel.list, shift ? "top" : "up");

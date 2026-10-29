@@ -1,10 +1,12 @@
 <script lang="ts">
   /* Одно поле панели настроек. Числа можно менять стрелками ↑↓
      (Shift — ×10) и протягиванием подписи влево-вправо. */
+  import ChevronDown from "@lucide/svelte/icons/chevron-down";
   import Minus from "@lucide/svelte/icons/minus";
   import Plus from "@lucide/svelte/icons/plus";
   import X from "@lucide/svelte/icons/x";
   import { localInput } from "../../nodes/widgets.ts";
+  import { menu } from "../../../ui/menu.svelte.ts";
   import type { Field } from "../../inspect/types.ts";
   import ColorDots from "./ColorDots.svelte";
   import DurField from "./DurField.svelte";
@@ -219,6 +221,19 @@
       <select class="input sm in-select" value={f.get()} disabled={f.disabled} aria-label={f.label} onchange={(e) => f.k === "select" && f.set(e.currentTarget.value)}>
         {#each f.opts as [val, text] (val)}<option value={val}>{text}</option>{/each}
       </select>
+    {:else if f.k === "menu"}
+      {@const cur = f.get()}
+      <button
+        type="button"
+        class="input sm in-menu"
+        aria-haspopup="menu"
+        aria-label={f.label}
+        disabled={f.disabled}
+        onclick={(e) => f.k === "menu" && menu.dropdown(e.currentTarget, f.items())}
+      >
+        <span style:font-family={cur.font} style:font-size-adjust={cur.adj}>{cur.text}</span>
+        <ChevronDown size={14} />
+      </button>
     {:else if f.k === "dur"}
       <DurField value={f.get()} set={f.set} presets={f.presets} min={f.min} />
     {:else if f.k === "when"}
