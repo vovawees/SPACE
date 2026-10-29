@@ -97,9 +97,9 @@
   pointer-events: none;
 }
 
-/* Слой мира всегда отдельный (translate3d). will-change не ставим: с ним
-   браузер не перерисовывает слой при смене масштаба — при приближении всё
-   мылится и резкость возвращается лишь после остановки. */
+/* Слой мира всегда отдельный (translate3d). will-change — только пока доску
+   двигают без масштаба: браузер сдвигает готовую картинку. При смене масштаба
+   с will-change слой не перерисовывается — всё мылится до остановки. */
 .world {
   --iz: 1;
   position: absolute;
@@ -108,6 +108,9 @@
   width: 0;
   height: 0;
   transform-origin: 0 0;
+}
+.world.panning {
+  will-change: transform;
 }
 .world > .layer {
   position: absolute;
@@ -176,6 +179,11 @@
 }
 .node.fit > .card {
   height: auto;
+}
+/* Заметке «по содержимому» обрезка не нужна (текст переносится, картинки,
+   таблицы и код ужаты по ширине) — а без неё браузеру дешевле каждый кадр. */
+.node.fit.t-note:not(.editing) > .card {
+  overflow: visible;
 }
 .node.tinted > .card {
   background: color-mix(in oklab, var(--c) var(--tint), var(--card));

@@ -737,7 +737,7 @@ export class Interact {
     // содержимое рамки (и вложенных рамок) едет вместе с ней — даже закреплённое
     const moving = withChildren(b, ids);
     const movingSet = new Set(moving);
-    s.beginTransient(moving);
+    s.beginTransient(moving, true);
     // выделенные линии, привязанные к тому, что остаётся на месте, отвязываются;
     // линии внутри рамки не отвязываются — тянутся за своей целью
     s.transact(() => {
@@ -1303,7 +1303,7 @@ export class Interact {
     const c = center(v.rect);
     const a0 = Math.atan2(p.w.y - c.y, p.w.x - c.x);
     const r0 = v.r;
-    s.beginTransient([v.id]);
+    s.beginTransient([v.id], true);
     let lastFlush = 0;
     return {
       kind: "rotate",

@@ -5,6 +5,8 @@
 import type { Pt, Rect } from "./geometry.ts";
 
 export const MIN_ZOOM = 0.04;
+const CULL_K = 0.3;
+const CULL_MIN = 360;
 export const MAX_ZOOM = 8;
 
 export class Camera {
@@ -13,8 +15,12 @@ export class Camera {
   z = $state(1);
   vw = $state(800);
   vh = $state(600);
-  /** Идёт движение (прокрутка/масштаб) — слой мира в режиме will-change. */
+  /** Идёт движение (прокрутка/масштаб). */
   moving = $state(false);
+  /** За это движение менялся масштаб. Пока только сдвиг — слой мира можно
+      держать готовой картинкой (will-change); при масштабе так нельзя:
+      картинка не перерисуется и будет мыльной до остановки. */
+  zooming = $state(false);
   cull = $state.raw<Rect>({ x: -2000, y: -2000, w: 4000, h: 4000 });
   /** Масштаб, при котором считался cull. */
   private cullZ = 1;
@@ -187,11 +193,16 @@ export class Camera {
   touch() {
     this.touchedAt = performance.now();
     if (!this.moving) this.moving = true;
+    if (this.z !== this.zAt) {
+      this.zAt = this.z;
+      if (!this.zooming) this.zooming = true;
+    }
     this.idleTimer ??= setTimeout(this.idle, 160);
     this.updateCull();
   }
 
   private touchedAt = 0;
+  private zAt = 1;
   private idle = () => {
     const left = 160 - (performance.now() - this.touchedAt);
     if (left > 4) {
@@ -200,7 +211,13 @@ export class Camera {
     }
     this.idleTimer = undefined;
     this.moving = false;
+    this.zooming = false;
   };
+
+  /** Чистый сдвиг без масштаба. */
+  get panning(): boolean {
+    return this.moving && !this.zooming;
+  }
 
   updateCull(force = false) {
     const v = this.view;
@@ -210,10 +227,11 @@ export class Camera {
     // размонтирования и повторной сборки узлов
     const zoomChanged = this.z / this.cullZ > 2.6 || this.z / this.cullZ < 0.625;
     if (!force && inside && !zoomChanged) return;
-    // запас вокруг экрана; при отдалении в него попадает много узлов — берём меньше
-    const k = this.z < 0.5 ? 0.35 : 0.6;
-    const mx = v.w * k;
-    const my = v.h * k;
+    // запас вокруг экрана — треть экрана, но не меньше ~360 px (телефон).
+    // Каждый лишний узел в DOM дорожает каждый кадр: браузер заново
+    // раскладывает по слоям всё нарисованное, а не только видимое
+    const mx = Math.max(v.w * CULL_K, CULL_MIN / this.z);
+    const my = Math.max(v.h * CULL_K, CULL_MIN / this.z);
     this.cull = { x: v.x - mx, y: v.y - my, w: v.w + mx * 2, h: v.h + my * 2 };
     this.cullZ = this.z;
   }

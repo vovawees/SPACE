@@ -26,6 +26,8 @@ export const LOGIC = Symbol("logic");
 export const LOGIC_SYNC = Symbol("logic-sync");
 
 const GEO = new Set(["x", "y", "w", "h", "r", "z", "parent", "type", "text"]);
+/** Больше стольких узлов отдельными слоями не поднимаем. */
+const LIFT_MAX = 120;
 
 export class NodeView {
   readonly id: string;
@@ -49,6 +51,8 @@ export class NodeView {
   text: Y.Text | null = null;
   /** Узел сейчас тащат с этого устройства. */
   transient = false;
+  /** Узел тащат/вращают — отдельный слой (will-change), чтобы не перерисовывать доску каждый кадр. */
+  lifted = $state(false);
   /** Этот клиент последним правил содержимое — он и пишет высоту. */
   ownsHeight = false;
   /** Нереактивные кэши компонентов (готовый HTML и т.п.). */
@@ -289,6 +293,7 @@ export class BoardStore {
   /** Узлы, которые сейчас тащат с этого устройства. */
   readonly transients = new Set<NodeView>();
 
+  private geoTimer: ReturnType<typeof setTimeout> | undefined;
   private markGeo = (v: NodeView) => {
     this.spatial.mark(v);
     // линии, привязанные к узлу, едут вместе с ним
@@ -297,6 +302,16 @@ export class BoardStore {
       const p = this.views.get(id);
       if (p) this.spatial.mark(p);
     }
+    // перетаскиваемое и так всегда на экране: подписчикам (видимые узлы,
+    // свечение) хватит пересчёта раз в ~0.1 с, а не на каждый кадр
+    if (v.transient) {
+      this.geoTimer ??= setTimeout(this.bumpGeo, 100);
+      return;
+    }
+    this.geoRev++;
+  };
+  private bumpGeo = () => {
+    this.geoTimer = undefined;
     this.geoRev++;
   };
 
@@ -796,13 +811,18 @@ export class BoardStore {
 
   /* ------------------------ переходные правки ------------------------ */
 
-  beginTransient(ids: Iterable<string>) {
+  /** `lift` — меняется только положение/поворот: узлы получают свой слой
+      (если их немного — иначе слоёв станет больше, чем пользы). */
+  beginTransient(ids: Iterable<string>, lift = false) {
     this.undo.stopCapturing();
     this.undo.captureTimeout = 1e9;
-    for (const id of ids) {
+    const list = [...ids];
+    const up = lift && list.length <= LIFT_MAX;
+    for (const id of list) {
       const v = this.views.get(id);
       if (!v) continue;
       v.transient = true;
+      if (up) v.lifted = true;
       this.transients.add(v);
     }
   }
@@ -829,9 +849,11 @@ export class BoardStore {
       const v = this.views.get(id);
       if (!v) continue;
       v.transient = false;
+      if (v.lifted) v.lifted = false;
       this.transients.delete(v);
       v.applyKeys(["x", "y", "w", "h", "r"]);
     }
+    this.geoRev++;
     this.undo.captureTimeout = 500;
     this.undo.stopCapturing();
   }

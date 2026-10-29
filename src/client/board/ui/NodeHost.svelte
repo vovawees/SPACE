@@ -184,6 +184,7 @@
   style:--peer={remote}
   style:--iz={iz}
   style:opacity={op < 1 ? op : null}
+  style:will-change={v.lifted ? "transform" : null}
   {@attach v.fit ? measureHeight(onHeight) : null}
 >
   <Comp {v} {sel} {editing} />

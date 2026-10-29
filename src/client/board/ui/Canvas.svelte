@@ -244,7 +244,7 @@
 
   <div
     class="world"
-    class:moving={cam.moving}
+    class:panning={cam.panning}
     class:multi={s.selection.size > 1}
     style:transform="translate3d({cam.x}px,{cam.y}px,0) scale({cam.z})"
   >

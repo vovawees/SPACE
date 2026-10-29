@@ -13,6 +13,9 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const browser = await launch();
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
 await ctx.addInitScript(() => localStorage.setItem("space:debug", "1"));
+if (process.env.CULLK) await ctx.addInitScript((k) => ((globalThis as any).__cullK = Number(k)), process.env.CULLK);
+if (process.env.ONLY) await ctx.addInitScript((o) => ((globalThis as any).__only = o), process.env.ONLY);
+if ((process.env.EXP || "").includes("gpuglow")) await ctx.addInitScript(() => ((globalThis as any).__glowGpu = true));
 const p: Page = await ctx.newPage();
 p.on("pageerror", (e) => console.log("pageerror:", e.message));
 await p.goto(base + "/");
@@ -40,6 +43,16 @@ if (EXP.includes("nopointer")) css += ".world.moving { pointer-events: none !imp
 if (EXP.includes("nowc")) css += ".world.moving { will-change: auto !important; }";
 if (EXP.includes("wcnode")) css += ".node.moving { will-change: transform; }";
 if (EXP.includes("wcworld")) css += ".world.moving { will-change: transform; }";
+if (EXP.includes("nolift")) css += ".node { will-change: auto !important; }";
+if (EXP.includes("nopan")) css += ".world.panning { will-change: auto !important; }";
+if (EXP.includes("wcglow")) css += ".glow-canvas { will-change: transform; }";
+if (EXP.includes("wcsel")) css += ".sel-box { will-change: transform; }";
+if (EXP.includes("nooverlay")) css += ".overlay { display: none !important; }";
+if (EXP.includes("svgvis")) css += "svg { overflow: visible !important; }";
+if (EXP.includes("cardvis")) css += ".world * { overflow: visible !important; }";
+if (EXP.includes("noui")) css += ".board > :not(.world):not(.grid):not(canvas) { display: none !important; }";
+if (EXP.includes("fz")) css += ".world > .layer.frames { transform: translateZ(0); }";
+if (EXP.includes("noframes")) css += ".world > .layer.frames { display: none !important; }";
 if (EXP.includes("noglow")) css += ".glow-canvas { display: none !important; }";
 if (css) await p.addStyleTag({ content: css });
 console.log("before:", await dom(), EXP.join(","));
@@ -49,7 +62,7 @@ await cdp.send("Profiler.enable");
 await cdp.send("Profiler.setSamplingInterval", { interval: 200 });
 const events: any[] = [];
 cdp.on("Tracing.dataCollected", (d: any) => events.push(...d.value));
-await cdp.send("Tracing.start", { categories: "devtools.timeline,disabled-by-default-devtools.timeline", transferMode: "ReportEvents" } as any);
+await cdp.send("Tracing.start", { categories: "devtools.timeline,disabled-by-default-devtools.timeline" + (process.env.INV ? ",disabled-by-default-devtools.timeline.invalidationTracking" : ""), transferMode: "ReportEvents" } as any);
 await cdp.send("Profiler.start");
 await p.evaluate(() => {
   const w = window as any;
@@ -83,7 +96,8 @@ if (scen === "zoommid") {
   await p.evaluate(() => {
     const b = (window as any).__board;
     const v = b.camera.view;
-    const ids = [...b.store.views.values()].filter((n: any) => n.type !== "frame" && n.x > v.x + v.w * 0.1 && n.x < v.x + v.w * 0.85 && n.y > v.y + v.h * 0.1 && n.y < v.y + v.h * 0.85).map((n: any) => n.id);
+    const only = (window as any).__only as string | undefined;
+    const ids = [...b.store.views.values()].filter((n: any) => n.type !== "frame" && (!only || n.type === only) && n.x > v.x + v.w * 0.1 && n.x < v.x + v.w * 0.85 && n.y > v.y + v.h * 0.1 && n.y < v.y + v.h * 0.85).map((n: any) => n.id);
     b.store.selection.set(ids);
   });
   const sel = await p.evaluate(() => (window as any).__board.store.selection.size);
@@ -107,6 +121,19 @@ const dt = fr.slice(1).map((t, i) => t - fr[i]!).sort((a, b) => a - b);
 console.log(`${scen}: ${Date.now() - t0}ms, frames ${fr.length}, fps ${Math.round(((fr.length - 1) / (fr[fr.length - 1]! - fr[0]!)) * 1000)}, p50 ${dt[Math.floor(dt.length / 2)]?.toFixed(1)} p95 ${dt[Math.floor(dt.length * 0.95)]?.toFixed(1)} worst ${dt[dt.length - 1]?.toFixed(1)}`);
 console.log("after:", await dom());
 
+if (process.env.INV) {
+  const inv = new Map<string, number>();
+  for (const e of events) {
+    if (e.name !== "PaintInvalidationTracking" && e.name !== "StyleRecalcInvalidationTracking" && e.name !== "LayoutInvalidationTracking") continue;
+    const d = e.args?.data ?? {};
+    const k = `${e.name.replace("InvalidationTracking", "")} ${d.nodeName ?? "?"} ${d.reason ?? ""}`.slice(0, 140);
+    inv.set(k, (inv.get(k) ?? 0) + 1);
+  }
+  console.log("invalidations:");
+  for (const [k, n] of [...inv].sort((a, b) => b[1] - a[1]).slice(0, 30)) console.log(String(n).padStart(6), k);
+  const lz = events.filter((e) => e.name === "Layerize" && e.ph === "X");
+  console.log("Layerize events", lz.length, "avg ms", (lz.reduce((a, e) => a + e.dur, 0) / Math.max(1, lz.length) / 1000).toFixed(2));
+}
 // trace totals on main renderer thread
 const main = events.find((e) => e.name === "thread_name" && e.args?.name === "CrRendererMain");
 const tid = main?.tid;

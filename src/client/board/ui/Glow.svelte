@@ -137,10 +137,10 @@
       canvas.width = canvas.height = 1;
       return;
     }
-    canvas.width = f.bw;
-    canvas.height = f.bh;
-    // программный холст: видеокарточный стал бы отдельным слоем, и всё, что
-    // лежит над ним, браузер раскладывал бы по слоям заново каждый кадр
+    // размер холста меняем, только если он другой: иначе браузер заново
+    // выделяет под него память. Холст программный — его не читают видеокартой
+    if (canvas.width !== f.bw) canvas.width = f.bw;
+    if (canvas.height !== f.bh) canvas.height = f.bh;
     canvas.getContext("2d", { willReadFrequently: true })?.putImageData(f.data, 0, 0);
   });
 </script>
