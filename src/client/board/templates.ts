@@ -1063,8 +1063,8 @@ function styleGuide(): Clip {
       { id: "d", hex: "#6c757d", t: "Неактивно" },
     ],
   });
-  t.text(640, 60, 520, "Заголовок H1", { parent: f, size: "xl", font: "wide", tw: "heavy", tt: "up", tls: "wide" });
-  t.text(640, 140, 520, "Подзаголовок H2", { parent: f, size: "l", font: "geo" });
+  t.text(640, 60, 520, "Заголовок", { parent: f, size: "xl", font: "wide", tw: "heavy", tt: "up", tls: "wide" });
+  t.text(640, 140, 520, "Подзаголовок", { parent: f, size: "l", font: "geo" });
   t.text(640, 200, 520, "Основной текст: читается легко и спокойно. Межстрочный интервал — полтора.", { parent: f, size: "m", font: "round" });
   t.text(640, 290, 520, "Акцент: «Редкий предмет!»", { parent: f, size: "m", font: "game", color: "red", tfx: "pop" });
   t.text(640, 340, 520, "Подпись от руки", { parent: f, size: "m", font: "marker", color: "blue", ti: true });
