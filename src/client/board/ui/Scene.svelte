@@ -5,6 +5,9 @@
   import { useBoard } from "../board.svelte.ts";
   import { drawScene } from "../scene.ts";
 
+  /** Что уже нарисовано DOM-узлами (пока они догружаются порциями) — не рисовать. */
+  let { skip }: { skip?: ReadonlySet<string> } = $props();
+
   const b = useBoard();
   const cam = b.camera;
   let canvas: HTMLCanvasElement;
@@ -39,6 +42,7 @@
       if (v) void (v.x + v.y + v.w + v.h + v.r), v.props;
     }
     void look.v;
+    const sk = skip;
     const w = cam.vw;
     const h = cam.vh;
     const W = Math.round(w * dpr);
@@ -52,7 +56,7 @@
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     const view = { x: cam.x, y: cam.y, z: cam.z, w, h };
-    untrack(() => drawScene(ctx, s, view, { dpr, onImage: bump, readonly: b.readonly }));
+    untrack(() => drawScene(ctx, s, view, { dpr, onImage: bump, readonly: b.readonly, skip: sk }));
     return () => cancelAnimationFrame(raf);
   });
 </script>

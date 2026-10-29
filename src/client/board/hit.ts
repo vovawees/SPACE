@@ -26,17 +26,22 @@ export function inkPoints(v: NodeView): Pt[] {
 
 /** Узел под точкой; tol — допуск в мировых единицах. */
 export function hitTest(s: BoardStore, p: Pt, tol: number, opts: { frames?: "label" | "all" | "none" } = {}): NodeView | undefined {
-  const order = s.order;
-  for (let i = order.length - 1; i >= 0; i--) {
-    const v = order[i]!;
+  // кандидаты — из пространственного индекса, с запасом на допуски и подписи линий
+  const pad = tol + 60;
+  const near = s.inRect({ x: p.x - pad, y: p.y - pad, w: pad * 2, h: pad * 2 });
+  for (let i = near.length - 1; i >= 0; i--) {
+    const v = near[i]!;
     if (v.type === "frame") continue;
     if (hitNode(s, v, p, tol)) return v;
   }
   if (opts.frames === "none") return undefined;
   // внутри рамки — самая тесная (вложенная), подпись — верхняя
   if (opts.frames === "all") return s.frameAt(p, NONE);
-  for (let i = order.length - 1; i >= 0; i--) {
-    const v = order[i]!;
+  // подпись — над рамкой и может быть шире маленькой рамки
+  const lp = 340 + tol * 2;
+  const labels = s.inRect({ x: p.x - lp, y: p.y - tol, w: lp + tol, h: 30 + tol * 3 });
+  for (let i = labels.length - 1; i >= 0; i--) {
+    const v = labels[i]!;
     if (v.type !== "frame") continue;
     if (frameLabelHit(v, p, tol)) return v;
   }
@@ -69,7 +74,7 @@ export function frameLabelHit(v: NodeView, p: Pt, tol: number): boolean {
 /** Выделение рамкой: рамки — только целиком, линии — по отрезкам, рисунки — по точкам. */
 export function nodesInRect(s: BoardStore, r: Rect): string[] {
   const out: string[] = [];
-  for (const v of s.order) {
+  for (const v of s.inRect(r)) {
     if (v.type === "frame") {
       if (contains(r, v.rect)) out.push(v.id);
       continue;
@@ -107,7 +112,7 @@ export function eraseHits(s: BoardStore, a: Pt, b: Pt, radius: number, out: Set<
     w: Math.abs(a.x - b.x) + radius * 2,
     h: Math.abs(a.y - b.y) + radius * 2,
   };
-  for (const v of s.order) {
+  for (const v of s.inRect(box)) {
     if (out.has(v.id) || v.locked) continue;
     if (v.type !== "ink" && v.type !== "path" && v.type !== "shape") continue;
     const bb = s.bounds(v);

@@ -57,6 +57,7 @@
   left: 0;
   top: 0;
   pointer-events: none;
+  transform-origin: 0 0;
   will-change: transform;
   background-size: var(--m) var(--m);
   background-position: calc(var(--m) / 2) calc(var(--m) / 2);
@@ -96,16 +97,17 @@
   pointer-events: none;
 }
 
+/* Слой мира всегда отдельный (translate3d). will-change не ставим: с ним
+   браузер не перерисовывает слой при смене масштаба — при приближении всё
+   мылится и резкость возвращается лишь после остановки. */
 .world {
+  --iz: 1;
   position: absolute;
   left: 0;
   top: 0;
   width: 0;
   height: 0;
   transform-origin: 0 0;
-}
-.world.moving {
-  will-change: transform;
 }
 .world > .layer {
   position: absolute;

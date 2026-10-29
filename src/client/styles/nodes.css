@@ -9,7 +9,8 @@
   place-items: center;
   line-height: 1;
   font-family: "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", "Twemoji Mozilla", var(--font-ui);
-  filter: drop-shadow(0 calc(2px * min(var(--iz), 3)) calc(5px * min(var(--iz), 3)) rgb(0 0 0 / 0.28));
+  /* тень — в долях размера эмодзи: масштабируется вместе с ним */
+  filter: drop-shadow(0 clamp(1px, 0.035em, 4px) clamp(2px, 0.085em, 10px) rgb(0 0 0 / 0.28));
   user-select: none;
   transition: transform 160ms var(--ease-spring);
 }

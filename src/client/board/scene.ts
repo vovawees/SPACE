@@ -218,11 +218,15 @@ export function drawScene(ctx: CanvasRenderingContext2D, s: BoardStore, view: Sc
   ctx.setTransform(dpr * z, 0, 0, dpr * z, dpr * x, dpr * y);
   const world: Rect = { x: -x / z, y: -y / z, w: view.w / z, h: view.h / z };
   const px = 1 / z;
-  const order = s.order;
+  // только то, что рядом с видом (из пространственного индекса); запас — на
+  // наконечники и толщину линий, которых нет в габаритах
+  const m = 40 * px;
+  const order = s.inRect({ x: world.x - m, y: world.y - m, w: world.w + m * 2, h: world.h + m * 2 });
 
   // рамки — снизу, вложенные — над внешними
   for (const v of s.layerFrames(order.filter((f) => f.type === "frame"))) {
     if (v.props.hid && opts.readonly) continue;
+    if (opts.skip?.has(v.id)) continue;
     const r = v.rect;
     if (!intersects(r, world)) continue;
     const c = palKey(pal, v.props.color);

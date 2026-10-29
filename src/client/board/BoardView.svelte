@@ -98,15 +98,22 @@
   });
 
   // положение камеры запоминается на устройстве
+  // (один таймер на всё движение: перезапуск таймера каждый кадр недёшев)
   let camTimer: ReturnType<typeof setTimeout> | undefined;
+  let camAt = 0;
+  const saveCam = () => {
+    const left = 400 - (performance.now() - camAt);
+    if (left > 8) {
+      camTimer = setTimeout(saveCam, left);
+      return;
+    }
+    camTimer = undefined;
+    if (placed) localStorage.setItem(CAM_KEY, JSON.stringify({ x: Math.round(cam.x), y: Math.round(cam.y), z: Math.round(cam.z * 1e4) / 1e4 }));
+  };
   $effect(() => {
-    const x = cam.x;
-    const y = cam.y;
-    const z = cam.z;
-    clearTimeout(camTimer);
-    camTimer = setTimeout(() => {
-      if (placed) localStorage.setItem(CAM_KEY, JSON.stringify({ x: Math.round(x), y: Math.round(y), z: Math.round(z * 1e4) / 1e4 }));
-    }, 400);
+    void (cam.x + cam.y + cam.z);
+    camAt = performance.now();
+    camTimer ??= setTimeout(saveCam, 400);
   });
 
   // что я вижу — для «следовать за мной» у других (не чаще 10 раз в секунду)

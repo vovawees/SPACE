@@ -5,7 +5,6 @@
   import { onMount, untrack } from "svelte";
   import { session } from "../../lib/session.svelte.ts";
   import { useBoard } from "../board.svelte.ts";
-  import { intersects } from "../geometry.ts";
   import type { NodeView } from "../store.svelte.ts";
   import Glow from "./Glow.svelte";
   import NodeHost from "./NodeHost.svelte";
@@ -50,15 +49,31 @@
 
   /* Рамки — отдельным слоем под всеми остальными узлами. Массивы
      переиспользуются, если состав не изменился: тогда {#each} не трогается. */
+  /* Видимое берётся из пространственного индекса: пересчёт стоит столько,
+     сколько узлов рядом с экраном, а не на всей доске. */
   const layers = $derived.by(() => {
     const c = cam.cull;
     const editing = s.editing;
     const live = b.live;
+    void s.geoRev;
+    void s.order;
+    const list = far ? [] : s.inRect(c);
+    // редактируемое, перетаскиваемое и «играющее» — даже за краем экрана
+    const extra: NodeView[] = [];
+    const seen = new Set(list);
+    const keep = (v: NodeView | undefined) => {
+      if (v && !seen.has(v)) {
+        seen.add(v);
+        extra.push(v);
+      }
+    };
+    keep(s.get(editing));
+    for (const v of s.transients) keep(v);
+    for (const id of live) keep(s.get(id));
+    const all = extra.length ? [...list, ...extra].sort((a, q) => a.oi - q.oi) : list;
     const frames: NodeView[] = [];
     const nodes: NodeView[] = [];
-    for (const v of s.order) {
-      const keep = v.id === editing || v.transient || live.has(v.id) || (!far && intersects(c, s.bounds(v)));
-      if (!keep) continue;
+    for (const v of all) {
       if (v.type === "frame") frames.push(v);
       else nodes.push(v);
     }
@@ -112,6 +127,15 @@
   });
   onMount(() => () => cancelAnimationFrame(admitRaf));
 
+  /* Пока узлы догружаются, под ними — упрощённый холст; уже показанное
+     DOM-узлами он не рисует (не дважды и быстрее). */
+  const drawn = $derived.by(() => {
+    void admitRev;
+    const out = new Set(admitted);
+    for (const f of layers.frames) out.add(f.id);
+    return out;
+  });
+
   let prevShown: NodeView[] = [];
   const nodes = $derived.by(() => {
     void admitRev;
@@ -120,10 +144,6 @@
     if (!same(out, prevShown)) prevShown = out;
     return prevShown;
   });
-
-  /* 1/масштаб для «экранных» толщин и подписей. Пока камера движется —
-     ступенями по 8 %: смена переменной пересчитывает стили всего мира. */
-  const iz = $derived(cam.moving ? Math.pow(1.08, Math.round(Math.log(1 / cam.z) / Math.log(1.08))) : 1 / cam.z);
 
   /* Кто что редактирует — строкой, чтобы движение чужих курсоров не
      пересчитывало все узлы. */
@@ -138,15 +158,23 @@
 
   /* --------------------------------- сетка --------------------------------- */
 
+  /* Пока шаг меняется в пределах ±12 %, слой сетки просто растягивается
+     (это делает видеокарта, без перерисовки); дальше — перерисовка с новым
+     шагом. Точки при этом «дышат» на доли пикселя — глазом не видно. */
+  let gridBase = 0;
   const grid = $derived.by(() => {
     let m = 24 * cam.z;
     while (m < 14) m *= 4;
     while (m >= 56) m /= 4;
     const M = m * 4;
+    if (!gridBase || m / gridBase > 1.12 || m / gridBase < 0.89) gridBase = m;
     const ox = (((cam.x % M) + M) % M) - M;
     const oy = (((cam.y % M) + M) % M) - M;
-    return { m, M, ox, oy, fine: Math.min(1, Math.max(0, (m - 14) / 22)) };
+    return { m: gridBase, k: m / gridBase, ox, oy, fine: Math.min(1, Math.max(0, (m - 14) / 22)) };
   });
+  // с запасом на сдвиг (до шага крупной сетки) и на растяжение
+  const gridW = $derived(Math.ceil((cam.vw + 480) / 0.88));
+  const gridH = $derived(Math.ceil((cam.vh + 480) / 0.88));
 
   /* -------------------------------- курсор -------------------------------- */
 
@@ -196,22 +224,22 @@
     <div
       class="grid"
       style:opacity={grid.fine}
-      style:width="{cam.vw + grid.M * 2}px"
-      style:height="{cam.vh + grid.M * 2}px"
-      style:transform="translate3d({grid.ox}px,{grid.oy}px,0)"
+      style:width="{gridW}px"
+      style:height="{gridH}px"
+      style:transform="translate3d({grid.ox}px,{grid.oy}px,0) scale({grid.k})"
       style:--m="{grid.m}px"
     ></div>
     <div
       class="grid major"
-      style:width="{cam.vw + grid.M * 2}px"
-      style:height="{cam.vh + grid.M * 2}px"
-      style:transform="translate3d({grid.ox}px,{grid.oy}px,0)"
-      style:--m="{grid.M}px"
+      style:width="{gridW}px"
+      style:height="{gridH}px"
+      style:transform="translate3d({grid.ox}px,{grid.oy}px,0) scale({grid.k})"
+      style:--m="{grid.m * 4}px"
     ></div>
   {/if}
 
   {#if far || pending}
-    <Scene />
+    <Scene skip={far ? undefined : drawn} />
   {/if}
 
   <div
@@ -219,12 +247,12 @@
     class:moving={cam.moving}
     class:multi={s.selection.size > 1}
     style:transform="translate3d({cam.x}px,{cam.y}px,0) scale({cam.z})"
-    style:--iz={iz}
   >
     {#if session.settings.glow && !far}
       <Glow />
     {/if}
-    <div class="layer frames">
+    <!-- подписи рамок держат экранный размер: --iz только этому слою -->
+    <div class="layer frames" style:--iz={b.iz}>
       {#each frames as v (v.id)}
         <NodeHost {v} remote={remoteEdit.get(v.id)} />
       {/each}

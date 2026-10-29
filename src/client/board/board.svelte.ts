@@ -86,13 +86,9 @@ const RETRY = { delay: 500, minDelay: 400, maxDelay: 5000, factor: 1.6 };
 const DENSE = 700;
 const DENSE_BACK = 480;
 
-function countIn(s: BoardStore, order: NodeView[], r: Rect, limit: number): number {
+function countIn(s: BoardStore, r: Rect, limit: number): number {
   let n = 0;
-  for (const v of order) {
-    if (v.type === "frame") continue;
-    const b = v.type === "path" ? s.bounds(v) : v.rect;
-    if (b.x < r.x + r.w && b.x + b.w > r.x && b.y < r.y + r.h && b.y + b.h > r.y && ++n > limit) break;
-  }
+  for (const v of s.inRect(r)) if (v.type !== "frame" && ++n > limit) break;
   return n;
 }
 
@@ -170,11 +166,20 @@ export class Board {
     this.lodPrev = next;
     return next;
   });
+  /** 1 / масштаб — для «экранных» толщин и подписей (CSS --iz), плавно, без
+      ступеней. Ставится только тем узлам и слоям, которым нужна. */
+  readonly iz = $derived(1 / this.camera.z);
+  private izLast = 1;
+  /** То же, но меняется, только когда камера остановилась: для невидимых зон попадания. */
+  readonly izIdle = $derived.by(() => {
+    if (!this.camera.moving) this.izLast = 1 / this.camera.z;
+    return this.izLast;
+  });
   /** Узлов в зоне отрисовки (не больше DENSE + 1); пересчёт — только при смене зоны или состава. */
   private readonly density = $derived.by(() => {
     const c = this.camera.cull;
-    const order = this.view.order;
-    return untrack(() => countIn(this.view, order, c, DENSE));
+    void this.view.order;
+    return untrack(() => countIn(this.view, c, DENSE));
   });
   /** Указатель и жесты; создаётся экраном доски. */
   ix!: Interact;

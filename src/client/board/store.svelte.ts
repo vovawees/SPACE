@@ -13,6 +13,8 @@ import type { UserRef } from "../../shared/types.ts";
 import { anchorPoint, buildConnector, resolvePoints, type ConnectorGeo, type ConnectorInput, type EndSpec } from "./connector.ts";
 import { aabb, boundsOf, center, containsPt, type Pt, type Rect, union } from "./geometry.ts";
 import { isFit, TEXT_TYPES, type Binding, type NodeData, type NodeProps, type NodeType } from "./model.ts";
+import { SpatialIndex } from "./spatial.ts";
+import { untrack } from "svelte";
 
 /** Происхождение локальных правок: попадают в историю отмены. */
 export const LOCAL = Symbol("local");
@@ -28,19 +30,22 @@ const GEO = new Set(["x", "y", "w", "h", "r", "z", "parent", "type", "text"]);
 export class NodeView {
   readonly id: string;
   readonly ymap: Y.Map<unknown>;
-  type = $state<NodeType>("note");
-  x = $state(0);
-  y = $state(0);
-  w = $state(100);
-  h = $state(100);
-  r = $state(0);
+  #type = $state<NodeType>("note");
+  #x = $state(0);
+  #y = $state(0);
+  #w = $state(100);
+  #h = $state(100);
+  #r = $state(0);
   z = $state("a0");
   parent = $state<string | undefined>(undefined);
-  props = $state.raw<NodeProps>({});
+  #props = $state.raw<NodeProps>({});
   /** Меняется при каждой правке текста. */
   textRev = $state(0);
-  /** Измеренная высота (для узлов «по содержимому»). */
-  mh = $state<number | null>(null);
+  #mh = $state<number | null>(null);
+  /** Габариты могли измениться — хранилище обновит пространственный индекс. */
+  onGeo: ((v: NodeView) => void) | null = null;
+  /** Место в order (сортировка выборок из индекса). */
+  oi = 0;
   text: Y.Text | null = null;
   /** Узел сейчас тащат с этого устройства. */
   transient = false;
@@ -53,6 +58,74 @@ export class NodeView {
     this.id = id;
     this.ymap = ymap;
     this.applyKeys(ymap.keys(), true);
+  }
+
+  /* Поля геометрии — через сеттеры: кто бы их ни менял (документ, жест,
+     замер высоты), индекс узнает об этом. */
+  get type(): NodeType {
+    return this.#type;
+  }
+  set type(t: NodeType) {
+    if (t === this.#type) return;
+    this.#type = t;
+    this.onGeo?.(this);
+  }
+  get x(): number {
+    return this.#x;
+  }
+  set x(n: number) {
+    if (n === this.#x) return;
+    this.#x = n;
+    this.onGeo?.(this);
+  }
+  get y(): number {
+    return this.#y;
+  }
+  set y(n: number) {
+    if (n === this.#y) return;
+    this.#y = n;
+    this.onGeo?.(this);
+  }
+  get w(): number {
+    return this.#w;
+  }
+  set w(n: number) {
+    if (n === this.#w) return;
+    this.#w = n;
+    this.onGeo?.(this);
+  }
+  get h(): number {
+    return this.#h;
+  }
+  set h(n: number) {
+    if (n === this.#h) return;
+    this.#h = n;
+    this.onGeo?.(this);
+  }
+  get r(): number {
+    return this.#r;
+  }
+  set r(n: number) {
+    if (n === this.#r) return;
+    this.#r = n;
+    this.onGeo?.(this);
+  }
+  get props(): NodeProps {
+    return this.#props;
+  }
+  set props(p: NodeProps) {
+    if (p === this.#props) return;
+    this.#props = p;
+    this.onGeo?.(this);
+  }
+  /** Измеренная высота (для узлов «по содержимому»). */
+  get mh(): number | null {
+    return this.#mh;
+  }
+  set mh(n: number | null) {
+    if (n === this.#mh) return;
+    this.#mh = n;
+    this.onGeo?.(this);
   }
 
   get fit(): boolean {
@@ -208,6 +281,24 @@ export class BoardStore {
   private orderDirty = false;
   /** Обратный индекс привязок: id цели → id линий. */
   readonly bindings = new Map<string, Set<string>>();
+  /** Где какой узел лежит — для выборок по области без обхода всей доски. */
+  private readonly spatial = new SpatialIndex<NodeView>((v) => untrack(() => this.bounds(v)));
+  /** Меняется при любом изменении габаритов любого узла: подписчики выборок
+      по области (видимые узлы, свечение) пересчитываются по нему. */
+  geoRev = $state(0);
+  /** Узлы, которые сейчас тащат с этого устройства. */
+  readonly transients = new Set<NodeView>();
+
+  private markGeo = (v: NodeView) => {
+    this.spatial.mark(v);
+    // линии, привязанные к узлу, едут вместе с ним
+    const bound = this.bindings.get(v.id);
+    if (bound) for (const id of bound) {
+      const p = this.views.get(id);
+      if (p) this.spatial.mark(p);
+    }
+    this.geoRev++;
+  };
 
   constructor(doc: Y.Doc, me: UserRef) {
     this.doc = doc;
@@ -256,6 +347,8 @@ export class BoardStore {
     const v = new NodeView(id, m);
     this.views.set(id, v);
     this.indexBindings(v);
+    v.onGeo = this.markGeo;
+    this.markGeo(v);
     this.orderDirty = true;
   }
 
@@ -264,6 +357,15 @@ export class BoardStore {
     if (!v) return;
     this.unindexBindings(v);
     this.views.delete(id);
+    v.onGeo = null;
+    this.spatial.delete(v);
+    this.transients.delete(v);
+    const bound = this.bindings.get(id);
+    if (bound) for (const pid of bound) {
+      const p = this.views.get(pid);
+      if (p) this.spatial.mark(p);
+    }
+    this.geoRev++;
     this.orderDirty = true;
   }
 
@@ -329,7 +431,9 @@ export class BoardStore {
 
   private resort() {
     this.orderDirty = false;
-    this.order = [...this.views.values()].sort(sortKey);
+    const order = [...this.views.values()].sort(sortKey);
+    for (let i = 0; i < order.length; i++) order[i]!.oi = i;
+    this.order = order;
   }
 
   /* ------------------------------- чтение ------------------------------- */
@@ -345,6 +449,19 @@ export class BoardStore {
       if (v) out.push(v);
     }
     return out;
+  }
+
+  /** Узлы, чьи габариты пересекают r, — в порядке отрисовки. Не подписывается
+      на геометрию: реактивным потребителям — читать geoRev и order. */
+  inRect(r: Rect): NodeView[] {
+    const out = untrack(() => this.spatial.query(r));
+    // узел мог исчезнуть, а порядок ещё не пересобран
+    return out.filter((v) => this.views.get(v.id) === v).sort((a, b) => a.oi - b.oi);
+  }
+
+  /** Габариты из индекса (без подписки на узел). */
+  indexedBounds(v: NodeView): Rect {
+    return untrack(() => this.spatial.box(v)) ?? untrack(() => this.bounds(v));
   }
 
   /** Габариты узла в мире (с поворотом; для линий — по реальным точкам). */
@@ -425,12 +542,14 @@ export class BoardStore {
 
   /** Рамка для прямоугольника r: обычный узел попадает в рамку центром, рамка — только
       целиком и только в рамку больше себя. Из подходящих — самая тесная (вложенная). */
-  containerOf(r: Rect, isFrame: boolean, skip?: ReadonlySet<string>, frames: readonly NodeView[] = this.order): NodeView | undefined {
+  containerOf(r: Rect, isFrame: boolean, skip?: ReadonlySet<string>, frames?: readonly NodeView[]): NodeView | undefined {
     const cx = r.x + r.w / 2;
     const cy = r.y + r.h / 2;
     let best: NodeView | undefined;
     let bestA = Infinity;
-    for (const f of frames) {
+    // кандидаты — рамки, задевающие точку (или прямоугольник рамки)
+    const list = frames ?? this.inRect(isFrame ? r : { x: cx, y: cy, w: 0, h: 0 });
+    for (const f of list) {
       if (f.type !== "frame" || skip?.has(f.id)) continue;
       const fx = f.x;
       const fy = f.y;
@@ -526,8 +645,9 @@ export class BoardStore {
 
   /** Самый верхний узел под точкой (для привязок и бросания на узел). */
   nodeAt(p: Pt, filter: (v: NodeView) => boolean = () => true, pad = 0): NodeView | undefined {
-    for (let i = this.order.length - 1; i >= 0; i--) {
-      const v = this.order[i]!;
+    const list = this.inRect({ x: p.x - pad, y: p.y - pad, w: pad * 2, h: pad * 2 });
+    for (let i = list.length - 1; i >= 0; i--) {
+      const v = list[i]!;
       if (v.type === "path" || v.type === "ink" || !filter(v)) continue;
       if (containsPt(this.bounds(v), p, pad)) return v;
     }
@@ -681,7 +801,9 @@ export class BoardStore {
     this.undo.captureTimeout = 1e9;
     for (const id of ids) {
       const v = this.views.get(id);
-      if (v) v.transient = true;
+      if (!v) continue;
+      v.transient = true;
+      this.transients.add(v);
     }
   }
 
@@ -707,6 +829,7 @@ export class BoardStore {
       const v = this.views.get(id);
       if (!v) continue;
       v.transient = false;
+      this.transients.delete(v);
       v.applyKeys(["x", "y", "w", "h", "r"]);
     }
     this.undo.captureTimeout = 500;
@@ -777,7 +900,6 @@ export class BoardStore {
   reparent(ids: Iterable<string>, moving?: ReadonlySet<string>) {
     const list = [...ids];
     if (!list.length) return;
-    const frames = this.order.filter((f) => f.type === "frame");
     let kids: Map<string, NodeView[]> | null = null;
     this.transact(() => {
       for (const id of list) {
@@ -789,7 +911,7 @@ export class BoardStore {
           kids ??= this.kidsMap();
           skip = new Set([v.id, ...this.descendants(v.id, kids).map((d) => d.id)]);
         }
-        const next = this.containerOf(this.bounds(v), v.type === "frame", skip, frames)?.id;
+        const next = this.containerOf(this.bounds(v), v.type === "frame", skip)?.id;
         if (next !== v.parent) {
           const m = this.nodes.get(id);
           if (next) m?.set("parent", next);

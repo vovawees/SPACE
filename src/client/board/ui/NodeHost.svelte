@@ -1,4 +1,4 @@
-<script lang="ts">
+<script lang="ts" module>
   /* Обёртка узла: положение, размер, поворот, состояния выделения.
      Содержимое рисует компонент своего типа. Узлы «по содержимому»
      сами меряют высоту; в документ её пишет только тот, кто правил. */
@@ -61,8 +61,6 @@
   import { QUIET, type NodeView } from "../store.svelte.ts";
   import { measureHeight } from "./measure.ts";
 
-  let { v, remote }: { v: NodeView; remote?: string } = $props();
-
   const COMPONENTS: Record<NodeType, Component<NodeCompProps>> = {
     note: NoteNode,
     text: NoteNode,
@@ -115,6 +113,18 @@
     words: WordsNode,
     spoiler: SpoilerNode,
   };
+  /* «Экранные» размеры (обводки, подписи, ручки) умножаются на --iz = 1/масштаб.
+     Переменная ставится только узлам, которым она сейчас нужна: смена масштаба
+     не пересчитывает стили всей доски, а нужное меняется плавно, каждый кадр. */
+  const IZ_ALWAYS: ReadonlySet<NodeType> = new Set(["video", "comment"]);
+  /** Им --iz нужна, пока они выделены или редактируются. */
+  const IZ_SELECTED: ReadonlySet<NodeType> = new Set(["path", "ink", "table"]);
+  /** Им — всегда, но точность во время движения не важна (невидимая зона попадания). */
+  const IZ_IDLE: ReadonlySet<NodeType> = new Set(["path", "ink"]);
+</script>
+
+<script lang="ts">
+  let { v, remote }: { v: NodeView; remote?: string } = $props();
 
   const b = useBoard();
   const s = $derived(b.view);
@@ -131,6 +141,8 @@
   const hid = $derived(!!v.props.hid);
   const gone = $derived(hid && b.readonly);
   const tag = $derived(v.props.tag?.trim() ?? "");
+  const izLive = $derived(IZ_ALWAYS.has(v.type) || hot || !!remote || hid || ((sel || editing) && (IZ_SELECTED.has(v.type) || (sel && s.selection.size > 1))));
+  const iz = $derived(izLive ? b.iz : IZ_IDLE.has(v.type) ? b.izIdle : null);
 
   /* разовый эффект от логики — у всех, кто видит доску */
   let el = $state<HTMLElement>();
@@ -170,6 +182,7 @@
   style:height={free || v.fit ? null : `${v.h}px`}
   style:--c={colorCss(color)}
   style:--peer={remote}
+  style:--iz={iz}
   style:opacity={op < 1 ? op : null}
   {@attach v.fit ? measureHeight(onHeight) : null}
 >

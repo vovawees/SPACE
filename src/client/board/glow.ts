@@ -28,6 +28,18 @@ export interface GlowField {
 
 const smooth = (t: number) => t * t * (3 - 2 * t);
 
+/* exp() в самом горячем цикле заменён таблицей: 8 значений на единицу
+   расстояния — точнее, чем видно на поле с шагом ≥ 9. */
+const LUT_RES = 8;
+const LUT = (() => {
+  const halo = REACH * CUT;
+  const n = Math.ceil(halo * LUT_RES) + 2;
+  const t = new Float32Array(n);
+  const norm = 1 / (1 - TAIL);
+  for (let i = 0; i < n; i++) t[i] = Math.max(0, (Math.exp(-i / LUT_RES / REACH) - TAIL) * norm);
+  return t;
+})();
+
 /**
  * Поле для прямоугольников в области area. Возвращает null, если
  * светиться нечему (меньше двух карточек рядом).
@@ -55,8 +67,6 @@ export function computeGlow(rects: Rect[], area: Rect, tint: [number, number, nu
   const bw = Math.max(2, Math.ceil((x1 - x0) / step) + 1);
   const bh = Math.max(2, Math.ceil((y1 - y0) / step) + 1);
   const field = new Float32Array(bw * bh);
-  const inv = 1 / REACH;
-  const norm = 1 / (1 - TAIL);
 
   for (const r of rects) {
     const gx0 = Math.max(0, Math.floor((r.x - halo - x0) / step));
@@ -79,7 +89,7 @@ export function computeGlow(rects: Rect[], area: Rect, tint: [number, number, nu
         const d = dx === 0 ? dy : dy === 0 ? dx : Math.sqrt(dx * dx + dy * dy);
         if (d >= halo) continue;
         // хвост вычтен — на границе ореола вклад плавно уходит в ноль
-        field[row + gx]! += (Math.exp(-d * inv) - TAIL) * norm;
+        field[row + gx]! += LUT[(d * LUT_RES) | 0]!;
       }
     }
   }

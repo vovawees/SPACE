@@ -182,19 +182,33 @@ export class Camera {
     this.anim = 0;
   }
 
-  /** Отметить движение и обновить отсечение. */
+  /** Отметить движение и обновить отсечение. Таймер покоя один на всё
+      движение (а не новый на каждый кадр). */
   touch() {
+    this.touchedAt = performance.now();
     if (!this.moving) this.moving = true;
-    clearTimeout(this.idleTimer);
-    this.idleTimer = setTimeout(() => (this.moving = false), 160);
+    this.idleTimer ??= setTimeout(this.idle, 160);
     this.updateCull();
   }
+
+  private touchedAt = 0;
+  private idle = () => {
+    const left = 160 - (performance.now() - this.touchedAt);
+    if (left > 4) {
+      this.idleTimer = setTimeout(this.idle, left);
+      return;
+    }
+    this.idleTimer = undefined;
+    this.moving = false;
+  };
 
   updateCull(force = false) {
     const v = this.view;
     const c = this.cull;
     const inside = v.x >= c.x && v.y >= c.y && v.x + v.w <= c.x + c.w && v.y + v.h <= c.y + c.h;
-    const zoomChanged = this.z / this.cullZ > 1.6 || this.z / this.cullZ < 0.625;
+    // при приближении зона сужается не сразу: туда-обратно колесом — без
+    // размонтирования и повторной сборки узлов
+    const zoomChanged = this.z / this.cullZ > 2.6 || this.z / this.cullZ < 0.625;
     if (!force && inside && !zoomChanged) return;
     // запас вокруг экрана; при отдалении в него попадает много узлов — берём меньше
     const k = this.z < 0.5 ? 0.35 : 0.6;
