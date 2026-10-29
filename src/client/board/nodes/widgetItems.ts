@@ -63,8 +63,8 @@ import {
   pokerReset,
   pokerReveal,
   pokerVotes,
+  restorePatch,
   rollLoot,
-  statsOf,
 } from "./design.ts";
 
 type Entry = MenuEntry;
@@ -477,7 +477,7 @@ export function widgetItems(b: Board, views: NodeView[]): Entry[] {
       out.push({
         label: "Восстановить шкалы",
         icon: RotateCcw,
-        run: () => b.view.updateMany(views.map((v) => [v.id, Object.fromEntries(statsOf(v.props).filter((st) => st.m).map((st) => [`sc:${st.id}`, st.m])) as Partial<NodeData>])),
+        run: () => b.view.updateMany(views.map((v) => [v.id, restorePatch(v.props) as Partial<NodeData>])),
       });
       out.push(rename);
       break;

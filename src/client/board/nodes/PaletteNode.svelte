@@ -25,7 +25,7 @@
   const chips = $derived(p.pm === "chips");
   const live = $derived(!b.readonly && !v.locked);
   const edit = $derived(sel && live);
-  const k = $derived(Math.max(0.7, Math.min(1.8, v.w / 420)));
+  const k = $derived(Math.max(0.7, Math.min(1.8, v.w / 420, v.h / 150)));
   let renaming = $state<string | null>(null);
 
   const save = (next: Swatch[]) => b.view.update(v.id, { sw: next });

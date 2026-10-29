@@ -24,7 +24,7 @@
   const cells = $derived(mapCells(p));
   const live = $derived(!b.readonly && !v.locked);
   const edit = $derived(sel && live);
-  const k = $derived(Math.max(0.7, Math.min(1.8, v.w / 520)));
+  const k = $derived(Math.max(0.7, Math.min(1.8, v.w / 520, v.h / 330)));
   const S = 10;
 
   let brush = $state("");

@@ -209,15 +209,15 @@ function drawDevice(ctx: CanvasRenderingContext2D, dev: string, r: Rect, px: num
   const rad = dev === "phone" ? 46 : dev === "tablet" ? 22 : game ? 6 : 10;
   if (bezel) {
     rr(ctx, r.x - bezel, r.y - bezel, r.w + bezel * 2, r.h + bezel * 2, rad + bezel);
-    ctx.fillStyle = game ? "#15161b" : "#1c1c21";
+    ctx.fillStyle = game ? "#15161b" : "#060608";
     ctx.fill();
   }
   rr(ctx, r.x, r.y, r.w, r.h, rad);
-  ctx.fillStyle = game ? "#0e1117" : "#fbfbfc";
+  ctx.fillStyle = game ? "#0e1117" : "#17181d";
   ctx.fill();
   if (!bezel) {
     ctx.lineWidth = px;
-    ctx.strokeStyle = "rgb(0 0 0 / 0.35)";
+    ctx.strokeStyle = "#3a3b44";
     ctx.stroke();
   }
   if (dev === "browser" || dev === "window") {
@@ -225,10 +225,10 @@ function drawDevice(ctx: CanvasRenderingContext2D, dev: string, r: Rect, px: num
     ctx.save();
     rr(ctx, r.x, r.y, r.w, r.h, rad);
     ctx.clip();
-    ctx.fillStyle = dev === "browser" ? "#e8e8ed" : "#f1f1f4";
+    ctx.fillStyle = dev === "browser" ? "#25262c" : "#212228";
     ctx.fillRect(r.x, r.y, r.w, h);
     if (dev === "browser") {
-      ctx.fillStyle = "#fff";
+      ctx.fillStyle = "#18191e";
       const uw = Math.min(560, r.w - 160);
       if (uw > 40) {
         rr(ctx, r.x + (r.w - uw) / 2 - 30, r.y + 8, uw, 28, 8);

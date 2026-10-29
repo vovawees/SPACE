@@ -15,7 +15,8 @@
   let { v }: NodeCompProps = $props();
   const b = useBoard();
   const p = $derived(v.props);
-  const k = $derived(Math.max(0.7, Math.min(1.8, v.w / 420)));
+  // крупнее — только если вырос и в ширину, и в высоту (иначе график не влезет)
+  const k = $derived(Math.max(0.7, Math.min(1.8, v.w / 420, v.h / (p.tb ? 360 : 280))));
   const PALETTE = ["violet", "orange", "cyan", "green", "pink", "yellow"];
   const series = $derived(
     curveSeries(p)

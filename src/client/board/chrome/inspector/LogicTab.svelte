@@ -7,11 +7,13 @@
   import Zap from "@lucide/svelte/icons/zap";
   import { untrack } from "svelte";
   import { useBoard } from "../../board.svelte.ts";
-  import { AUTO_INPUT, actDef, actionsFor, logicEnds, suggestRule, trigDef, triggersFor } from "../../logic.svelte.ts";
+  import { AUTO_INPUT, actDef, actionsFor, logicEnds, optionsOf, suggestRule, trigDef, triggersFor } from "../../logic.svelte.ts";
   import { COLOR_ITEMS, TYPE_LABELS, type LogicRule, type NodeType } from "../../model.ts";
   import { nodeTitle, statusesOf } from "../../nodes/values.ts";
   import { playersOf } from "../../nodes/play.ts";
-  import { FX_KINDS, wheelOptions } from "../../nodes/widgets.ts";
+  import { statsOf } from "../../nodes/design.ts";
+  import { FX_KINDS } from "../../nodes/widgets.ts";
+  import type { NodeView } from "../../store.svelte.ts";
 
   let { arrowId, onclose }: { arrowId: string; onclose: () => void } = $props();
   const b = useBoard();
@@ -36,7 +38,9 @@
   /** Итог считается сам — событие не нужно. */
   const derivedAct = $derived(!!rule && (rule.do === "share" || rule.do === "count" || rule.do === "all"));
   const mirror = $derived(rule?.do === "mirror");
-  const GOAL_TYPES = new Set<NodeType>(["counter", "dice", "calc", "poll", "button", "note", "text", "shape", "score", "buzzer", "input", "calendar", "words", "random", "coin"]);
+  const GOAL_TYPES = new Set<NodeType>(["counter", "dice", "calc", "poll", "button", "note", "text", "shape", "score", "buzzer", "input", "calendar", "words", "random", "coin", "loot", "curve"]);
+  /** Игроки счёта или шкалы карточки персонажа. */
+  const whoOf = (v: NodeView) => (v.type === "stats" ? statsOf(v.props) : playersOf(v.props));
   const needGoal = $derived(derivedAct && !!ends && GOAL_TYPES.has(ends.src.type));
   const invTrig = $derived(trig?.inv && ends ? trigDef(ends.src.type, trig.inv) : undefined);
   const canRev = $derived(!!invTrig && !!act?.inv && !derivedAct && !mirror);
@@ -68,9 +72,10 @@
     if (!ends) return;
     const d = trigDef(ends.src.type, id);
     const p: Partial<LogicRule> = { on: id, tn: undefined, tx: undefined };
-    if (d?.n) p.tn = ends.src.type === "rating" ? 4 : ends.src.type === "progress" ? 50 : 10;
+    if (d?.n) p.tn = ends.src.type === "rating" ? 4 : ends.src.type === "progress" || ends.src.type === "roadmap" ? 50 : 10;
     if (d?.x === "state") p.tx = String(Math.max(0, statusesOf(ends.src.props).length - 1));
-    if (d?.x === "option") p.tx = wheelOptions(ends.src)[0]?.t;
+    if (d?.x === "option") p.tx = optionsOf(ends.src)[0];
+    if (d?.x === "player") p.tx = rule?.tx && whoOf(ends.src).some((x) => x.id === rule?.tx) ? rule.tx : whoOf(ends.src)[0]?.id;
     put(p);
   }
 
@@ -81,7 +86,7 @@
     if (d?.x === "color") p.x = "green";
     if (d?.x === "fx") p.x = "confetti";
     if (d?.x === "state") p.x = String(Math.max(0, statusesOf(ends.tgt.props).length - 1));
-    if (d?.x === "player") p.x = rule?.x && playersOf(ends.tgt.props).some((x) => x.id === rule?.x) ? rule.x : playersOf(ends.tgt.props)[0]?.id;
+    if (d?.x === "player") p.x = rule?.x && whoOf(ends.tgt).some((x) => x.id === rule?.x) ? rule.x : whoOf(ends.tgt)[0]?.id;
     if (id === "share" || id === "count" || id === "all") p.n = needGoalFor(ends.src.type) ? 10 : undefined;
     // эффекты и сообщения не «отматываются»
     if (d?.x === "fx" || d?.x === "text" || id === "go") p.rev = false;
@@ -156,9 +161,18 @@
             {/if}
             {#if trig?.x === "option"}
               <label class="field">
-                <span class="label">Вариант</span>
+                <span class="label">{ends.src.type === "loot" ? "Предмет" : "Вариант"}</span>
                 <select class="input sm" value={rule.tx ?? ""} onchange={(e) => put({ tx: e.currentTarget.value })}>
-                  {#each wheelOptions(ends.src) as o (o.id)}<option value={o.t}>{o.t}</option>{/each}
+                  {#each optionsOf(ends.src) as o (o)}<option value={o}>{o}</option>{/each}
+                </select>
+              </label>
+            {/if}
+            {#if trig?.x === "player"}
+              {@const pl = whoOf(ends.src)}
+              <label class="field">
+                <span class="label">Шкала</span>
+                <select class="input sm" value={pl.some((x) => x.id === rule.tx) ? rule.tx : (pl[0]?.id ?? "")} onchange={(e) => put({ tx: e.currentTarget.value })}>
+                  {#each pl as x (x.id)}<option value={x.id}>{x.t || "Без имени"}</option>{/each}
                 </select>
               </label>
             {/if}
@@ -204,9 +218,9 @@
             </label>
           {/if}
           {#if act?.x === "player"}
-            {@const pl = playersOf(ends.tgt.props)}
+            {@const pl = whoOf(ends.tgt)}
             <label class="field">
-              <span class="label">Кому</span>
+              <span class="label">{ends.tgt.type === "stats" ? "Шкала" : "Кому"}</span>
               <select class="input sm" value={pl.some((x) => x.id === rule.x) ? rule.x : (pl[0]?.id ?? "")} onchange={(e) => put({ x: e.currentTarget.value })}>
                 {#each pl as x (x.id)}<option value={x.id}>{x.t || "Без имени"}</option>{/each}
               </select>

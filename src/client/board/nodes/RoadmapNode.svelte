@@ -22,7 +22,7 @@
   const share = $derived(roadShare(p));
   const now = $derived(nowPos(p));
   const live = $derived(!b.readonly && !v.locked);
-  const k = $derived(Math.max(0.7, Math.min(1.7, v.w / 720)));
+  const k = $derived(Math.max(0.7, Math.min(1.35, v.w / 720)));
   let track = $state<HTMLElement>();
 
   let drag = $state<{ id: string; mode: "move" | "size"; x0: number; s0: number; d0: number; s: number; d: number; on: boolean } | null>(null);

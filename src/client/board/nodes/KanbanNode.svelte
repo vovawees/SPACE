@@ -22,7 +22,8 @@
   const by = $derived(cardsByCol(p));
   const done = $derived(kanbanDone(p));
   const live = $derived(!b.readonly && !v.locked);
-  const k = $derived(Math.max(0.7, Math.min(1.7, (v.w - 16) / cols.length / 170)));
+  // широкая доска — больше места карточкам, а не огромный шрифт
+  const k = $derived(Math.max(0.7, Math.min(1.25, (v.w - 16) / cols.length / 190)));
   let root = $state<HTMLElement>();
 
   let drag = $state<{ id: string; x0: number; y0: number; dx: number; dy: number; on: boolean } | null>(null);

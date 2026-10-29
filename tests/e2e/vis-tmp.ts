@@ -339,7 +339,34 @@ async function frames(p: Page) {
   console.log("undo ok:", JSON.stringify(undone) === JSON.stringify(before));
 }
 
+async function tpls(p: Page) {
+  const names = (process.argv[3] || "Баланс прокачки,Карта уровня,Добыча и награды,Персонажи и враги,Интерфейс игры,Макет приложения,Стайлгайд,Плейтест,Спринт,Канбан,Дорожная карта,Лист персонажа").split(",");
+  await p.locator('.lib-rail button[aria-label="Шаблоны"]').click();
+  await sleep(400);
+  await shot("tpls-panel");
+  for (const name of names) {
+    await ev((b) => b.view.remove([...b.store.views.keys()]));
+    await sleep(200);
+    const panel = await p.locator(".lib-tpl").count();
+    if (!panel) { await p.locator('.lib-rail button[aria-label="Шаблоны"]').click(); await sleep(400); }
+    const item = p.locator(".lib-tpl", { hasText: name }).first();
+    if (!(await item.count())) { console.log("no template", name); continue; }
+    await item.click();
+    await sleep(1200);
+    await p.keyboard.press("Escape");
+    if (await p.locator(".lib-tpl").count()) await p.locator('.lib-rail button[aria-label="Шаблоны"]').click();
+    await sleep(300);
+    await ev((b) => { b.store.selection.set([]); const r = b.store.allBounds(); if (r) b.camera.fit(r, { pad: 40, maxZoom: 1.5 }); });
+    await p.mouse.move(5, 450);
+    await sleep(1200);
+    const info = await ev((b) => ({ n: b.store.views.size, types: [...new Set([...b.store.views.values()].map((v: any) => v.type))].join(",") }));
+    console.log(name, JSON.stringify(info));
+    await shot("tpl-" + name.replace(/\s+/g, "_"));
+  }
+}
+
 try {
+  if (which === "tpls") await tpls(p);
   if (which === "frames") await frames(p);
   if (which === "look") await look(p);
   if (which === "panwc") await panwc(p);

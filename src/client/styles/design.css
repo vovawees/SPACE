@@ -1362,16 +1362,17 @@ button.tm-tile.on {
 
 /* ------------------------- рамки-устройства (макеты) ------------------------- */
 
+/* экраны тёмные, как и доска: текст и фигуры внутри видны без перекраски */
 .frame-body.dev {
-  --scr: #fbfbfc;
-  --scr-ink: #16161a;
+  --scr: #17181d;
+  --scr-ink: #eef0f5;
   background: var(--scr);
   border: 0;
   color: var(--scr-ink);
   overflow: hidden;
 }
 .node.tinted .frame-body.dev {
-  --scr: color-mix(in oklab, var(--c) 14%, #fbfbfc);
+  --scr: color-mix(in oklab, var(--c) 16%, #17181d);
   background: var(--scr);
 }
 /* корпус телефона и планшета — снаружи экрана: внутри ровно 390×844 */
@@ -1379,16 +1380,16 @@ button.tm-tile.on {
   border-radius: 46px;
   overflow: visible;
   box-shadow:
-    0 0 0 11px #1c1c21,
-    0 0 0 12px #3a3a42,
+    0 0 0 11px #060608,
+    0 0 0 12px #4a4b55,
     0 24px 60px -10px rgb(0 0 0 / 0.55);
 }
 .frame-body.dev-tablet {
   border-radius: 22px;
   overflow: visible;
   box-shadow:
-    0 0 0 16px #1c1c21,
-    0 0 0 17px #3a3a42,
+    0 0 0 16px #060608,
+    0 0 0 17px #4a4b55,
     0 24px 60px -10px rgb(0 0 0 / 0.5);
 }
 .frame-label.dvl-phone {
@@ -1448,7 +1449,7 @@ button.tm-tile.on {
 .frame-body.dev-window {
   border-radius: 10px;
   box-shadow:
-    0 0 0 1px rgb(0 0 0 / 0.35),
+    0 0 0 1px #3a3b44,
     0 18px 50px -12px rgb(0 0 0 / 0.5);
 }
 .dv-bar,
@@ -1459,9 +1460,9 @@ button.tm-tile.on {
   right: 0;
   display: flex;
   align-items: center;
-  background: #e8e8ed;
-  border-bottom: 1px solid #d4d4db;
-  color: #4b4b55;
+  background: #25262c;
+  border-bottom: 1px solid #34353d;
+  color: #b4b6c0;
   font: 500 13px/1 var(--font-ui);
 }
 .dv-bar {
@@ -1495,8 +1496,8 @@ button.tm-tile.on {
   margin: 0 auto;
   padding: 0 14px;
   border-radius: 8px;
-  background: #fff;
-  color: #55555f;
+  background: #18191e;
+  color: #a3a5ae;
   white-space: nowrap;
   overflow: hidden;
   transform: translateX(-30px);
@@ -1509,7 +1510,7 @@ button.tm-tile.on {
 .dv-title {
   height: 34px;
   padding-left: 14px;
-  background: #f1f1f4;
+  background: #212228;
 }
 .dv-tname {
   flex: 1;
@@ -1530,7 +1531,7 @@ button.tm-tile.on {
   height: 100%;
   font-style: normal;
   font-size: 12px;
-  color: #5b5b66;
+  color: #9a9ca6;
 }
 .dv-ctl i.x {
   font-size: 13px;

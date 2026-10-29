@@ -2,7 +2,22 @@
    Строятся как содержимое буфера обмена — вставка переназначает id,
    привязки стрелок и родителей, поэтому шаблон можно ставить сколько
    угодно раз. Миниатюры рисуются из тех же данных. */
-import { colorName, type ColorName, type Head, type LogicRule, type NodeData, type NodeType, type Route, type ShapeKind, type TextSize } from "./model.ts";
+import {
+  colorName,
+  defaults,
+  objectKey,
+  terrainKey,
+  type ColorName,
+  type DeviceKind,
+  type FontName,
+  type Head,
+  type LogicRule,
+  type NodeData,
+  type NodeType,
+  type Route,
+  type ShapeKind,
+  type TextSize,
+} from "./model.ts";
 import type { Clip } from "./ops.ts";
 import { pollData } from "./nodes/poll.ts";
 import { isoDay } from "./nodes/task.ts";
@@ -16,6 +31,49 @@ interface Opt {
   parent?: string;
   size?: TextSize;
   h?: number;
+  font?: FontName;
+}
+
+/** Карточки канбана: [колонка, текст, цвет?] → поля kc:<id>. */
+function cards(list: [string, string, ColorName?][]): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  list.forEach(([col, t, c], i) => (out[`kc:c${i + 1}`] = { t, col, o: i + 1, ...(c ? { c } : {}) }));
+  return out;
+}
+
+/** Этапы дорожной карты: [текст, начало, длительность, строка, цвет, готовность?, веха?] → поля rb:<id>. */
+function bars(list: [string, number, number, number, ColorName, number?, boolean?][]): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  list.forEach(([t, st, d, o, c, pv, m], i) => (out[`rb:b${i + 1}`] = { t, s: st, d, o, c, ...(pv ? { pv } : {}), ...(m ? { m } : {}) }));
+  return out;
+}
+
+/** Карта из строк: буква — местность (и предмет поверх). */
+const MAP_KEY: Record<string, [string | null, string | null]> = {
+  "~": [null, null],
+  s: ["sand", null],
+  g: ["grass", null],
+  W: ["wall", null],
+  ".": ["stone", null],
+  L: ["lava", null],
+  H: ["grass", "hero"],
+  T: ["grass", "tree"],
+  K: ["grass", "key"],
+  E: ["grass", "enemy"],
+  e: ["stone", "enemy"],
+  C: ["stone", "chest"],
+  D: ["stone", "door"],
+};
+function mapRows(rows: string[]): Record<string, unknown> {
+  const out: Record<string, unknown> = { gb: "water", gw: rows[0]!.length, gh: rows.length };
+  rows.forEach((row, y) =>
+    [...row].forEach((ch, x) => {
+      const [t, o] = MAP_KEY[ch] ?? [null, null];
+      if (t) out[terrainKey(x, y)] = t;
+      if (o) out[objectKey(x, y)] = o;
+    }),
+  );
+  return out;
 }
 
 class TB {
@@ -34,10 +92,20 @@ class TB {
     return this.add({ type: "note", x, y, w, h: o.h ?? 110, fit: true, text, color: o.color ?? "default", parent: o.parent, size: o.size });
   }
   text(x: number, y: number, w: number, text: string, o: Opt & { align?: "left" | "center" | "right" } = {}): string {
-    return this.add({ type: "text", x, y, w, h: o.h ?? 40, fit: true, text, size: o.size ?? "m", color: o.color, parent: o.parent, align: o.align });
+    return this.add({ type: "text", x, y, w, h: o.h ?? 40, fit: true, text, size: o.size ?? "m", color: o.color, parent: o.parent, align: o.align, font: o.font });
   }
-  shape(x: number, y: number, w: number, h: number, kind: ShapeKind, text: string, o: Opt & { fill?: "none" | "tint" | "solid" } = {}): string {
-    return this.add({ type: "shape", x, y, w, h, kind, text, fill: o.fill ?? "tint", stroke: "m", dash: "solid", color: o.color ?? "default", parent: o.parent, size: o.size ?? "s", align: "center" });
+  shape(x: number, y: number, w: number, h: number, kind: ShapeKind, text: string, o: Opt & { fill?: "none" | "tint" | "solid"; dash?: "solid" | "dash" | "dot" } = {}): string {
+    return this.add({ type: "shape", x, y, w, h, kind, text, fill: o.fill ?? "tint", stroke: "m", dash: o.dash ?? "solid", color: o.color ?? "default", parent: o.parent, size: o.size ?? "s", align: "center", font: o.font });
+  }
+  /** Рамка-устройство: экран телефона, окно браузера, экран игры. */
+  device(x: number, y: number, dev: DeviceKind, name: string, w: number, h: number, extra: Partial<NodeData> = {}): string {
+    return this.add({ type: "frame", x, y, w, h, name, color: "default", dev, ...extra });
+  }
+  /** Виджет с настройками по умолчанию; свои поля — поверх. Свои kc:/rb:/sc:… заменяют примерные. */
+  wd(type: NodeType, x: number, y: number, extra: Record<string, unknown> = {}): string {
+    const own = Object.keys(extra).some((k) => k.includes(":"));
+    const base = Object.fromEntries(Object.entries(defaults(type)).filter(([k]) => !own || !k.includes(":")));
+    return this.add({ type, x, y, w: 240, h: 160, ...base, ...extra } as NodeData);
   }
   task(x: number, y: number, w: number, text: string, o: Opt & { done?: boolean; prio?: "low" | "mid" | "high"; due?: number } = {}): string {
     return this.add({ type: "task", x, y, w, h: 80, fit: true, text, color: o.color, parent: o.parent, done: o.done || undefined, prio: o.prio, due: o.due !== undefined ? isoDay(o.due) : undefined });
@@ -111,26 +179,36 @@ export interface Template {
   build: () => Clip;
 }
 
-export const TEMPLATE_GROUPS = ["Интерактив и логика", "Игры", "Команда", "Планы и стратегия", "Схемы и идеи"] as const;
+export const TEMPLATE_GROUPS = ["Интерактив и логика", "Игры", "Разработка и дизайн", "Команда", "Планы и стратегия", "Схемы и идеи"] as const;
 export type TemplateGroup = (typeof TEMPLATE_GROUPS)[number];
 
 /* ------------------------------ шаблоны ------------------------------ */
 
 function kanban(): Clip {
   const t = new TB();
-  const cols: [string, ColorName][] = [
-    ["💡 Идеи", "gray"],
-    ["📋 Сделать", "blue"],
-    ["⚙️ В работе", "yellow"],
-    ["✅ Готово", "green"],
-  ];
-  const f = cols.map(([name, c], i) => t.frame(i * 340, 0, 300, 640, name, c));
-  t.task(20, 50, 260, "Придумать название проекта", { parent: f[0] });
-  t.task(20, 150, 260, "Собрать референсы и примеры", { parent: f[0] });
-  t.task(360, 50, 260, "Расписать задачи на неделю", { parent: f[1], prio: "high" });
-  t.task(360, 150, 260, "Созвониться с командой", { parent: f[1], due: 1 });
-  t.task(700, 50, 260, "Сделать прототип", { parent: f[2], prio: "mid" });
-  t.task(1040, 50, 260, "Создать доску", { parent: f[3], done: true });
+  const kb = t.wd("kanban", 0, 0, {
+    w: 1100,
+    title: "Задачи проекта",
+    kb: [
+      { id: "a", t: "💡 Идеи", c: "gray" },
+      { id: "b", t: "📋 Сделать", c: "blue" },
+      { id: "c", t: "⚙️ В работе", c: "yellow", lim: 3 },
+      { id: "d", t: "✅ Готово", c: "green" },
+    ],
+    ...cards([
+      ["a", "Придумать название проекта"],
+      ["a", "Собрать референсы и примеры", "pink"],
+      ["b", "Расписать задачи на неделю"],
+      ["b", "Созвониться с командой", "violet"],
+      ["c", "Сделать прототип", "orange"],
+      ["d", "Создать доску"],
+    ]),
+  });
+  const pr = t.progress(0, 360, 520, "Готово задач", 0, { color: "green" });
+  t.arrow(kb, pr, { route: "straight", lg: { on: "change", do: "share" } });
+  const st = t.sticker(560, 350, 90, "🏁");
+  t.arrow(kb, st, { lg: { on: "complete", do: "fx", x: "confetti", rev: false } });
+  t.text(680, 372, 420, "Перетаскивайте карточки между колонками — полоса «Готово задач» считает сама, а когда готово всё, будет салют.", { size: "s", color: "gray" });
   return t.clip();
 }
 
@@ -176,24 +254,23 @@ function flowchart(): Clip {
 
 function roadmap(): Clip {
   const t = new TB();
-  const f = t.frame(0, 0, 1420, 600, "🗺️ Дорожная карта", "default");
-  const q = ["Квартал 1", "Квартал 2", "Квартал 3", "Квартал 4"];
-  q.forEach((name, i) => t.text(220 + i * 300, 40, 260, `**${name}**`, { parent: f, size: "s", align: "center" }));
-  const lanes: [string, ColorName][] = [
-    ["Продукт", "violet"],
-    ["Дизайн", "pink"],
-    ["Разработка", "blue"],
-    ["Запуск", "green"],
-  ];
-  lanes.forEach(([name, _c], i) => t.text(30, 130 + i * 110, 170, `**${name}**`, { parent: f, size: "s" }));
-  const bar = (lane: number, from: number, to: number, label: string) =>
-    t.shape(220 + from * 300, 116 + lane * 110, (to - from + 1) * 300 - 40, 56, "pill", label, { parent: f, color: lanes[lane]![1] });
-  bar(0, 0, 1, "Исследование и цели");
-  bar(0, 2, 3, "Метрики и обратная связь");
-  bar(1, 0, 0, "Макеты");
-  bar(1, 1, 2, "Дизайн-система");
-  bar(2, 1, 3, "Разработка MVP");
-  bar(3, 3, 3, "Релиз 🚀");
+  const rm = t.wd("roadmap", 0, 0, {
+    w: 1000,
+    title: "🗺️ Дорожная карта на год",
+    pu: "q",
+    pn: 4,
+    ...bars([
+      ["Исследование и цели", 0, 1, 1, "violet", 100],
+      ["Макеты", 0, 1, 2, "pink", 80],
+      ["Дизайн-система", 1, 2, 3, "pink", 20],
+      ["Разработка MVP", 1, 2, 4, "blue", 10],
+      ["Метрики и обратная связь", 2, 2, 5, "cyan"],
+      ["Релиз 🚀", 3, 1, 6, "green", 0, true],
+    ]),
+  });
+  const pr = t.progress(1060, 0, 400, "Готовность плана", 0, { color: "violet" });
+  t.arrow(rm, pr, { lg: { on: "change", do: "share" } });
+  t.note(1060, 150, 400, "**⚠️ Риски и зависимости**\n- Дизайн-система нужна до MVP\n- Обратная связь — не позже 3 квартала", { color: "yellow" });
   return t.clip();
 }
 
@@ -423,16 +500,42 @@ function scoreboard(): Clip {
 
 function rpg(): Clip {
   const t = new TB();
-  const f = t.frame(0, 0, 980, 720, "🧙 Лист персонажа", "violet");
-  t.note(40, 60, 420, "**Имя:** …\n**Класс:** Воин\n**Раса:** Человек\n**Уровень:** 1", { parent: f, color: "violet" });
-  t.counter(500, 60, "Здоровье", { parent: f, color: "red", n0: 20 });
-  t.counter(740, 60, "Мана", { parent: f, color: "blue", n0: 10 });
-  t.table(40, 240, 420, [["Характеристика", "Значение"], ["Сила", "14"], ["Ловкость", "12"], ["Телосложение", "13"], ["Интеллект", "8"], ["Мудрость", "10"], ["Харизма", "11"]], f);
-  t.dice(500, 240, 1, 20, { parent: f });
-  t.counter(740, 240, "Золото", { parent: f, color: "yellow", n0: 50, step: 5, h: 170 });
-  t.progress(500, 440, 440, "Опыт до 2 уровня", 35, { parent: f, color: "green" });
-  t.note(40, 530, 420, "**🎒 Инвентарь**\n- [x] Меч\n- [ ] Зелье лечения ×2\n- [ ] Верёвка, факел", { parent: f, color: "yellow" });
-  t.note(500, 560, 440, "**📜 Задание:** найти пропавший караван у старой мельницы", { parent: f });
+  const f = t.frame(0, 0, 1000, 800, "🧙 Лист персонажа", "violet");
+  const hero = t.wd("stats", 40, 60, {
+    w: 420,
+    title: "Имя героя",
+    desc: "Воин · человек · уровень 1",
+    emoji: "🛡️",
+    parent: f,
+    pl: [
+      { id: "hp", t: "Здоровье", c: "red", m: 20 },
+      { id: "mp", t: "Мана", c: "blue", m: 10 },
+      { id: "str", t: "Сила", c: "orange" },
+      { id: "dex", t: "Ловкость", c: "green" },
+      { id: "con", t: "Телосложение", c: "yellow" },
+      { id: "int", t: "Интеллект", c: "violet" },
+    ],
+    "sc:hp": 20,
+    "sc:mp": 10,
+    "sc:str": 14,
+    "sc:dex": 12,
+    "sc:con": 13,
+    "sc:int": 8,
+  });
+  const d20 = t.dice(500, 60, 1, 20, { parent: f });
+  t.counter(740, 60, "Золото", { parent: f, color: "yellow", n0: 50, step: 5, h: 170 });
+  const hit = t.widget("button", 40, 430, 200, 72, { title: "Удар −3", emoji: "💥", color: "red", parent: f });
+  const rest = t.widget("button", 260, 430, 200, 72, { title: "Отдых", emoji: "🔥", color: "green", parent: f });
+  t.arrow(hit, hero, { lg: { on: "press", do: "sub", n: 3, x: "hp" } });
+  t.arrow(rest, hero, { lg: { on: "press", do: "reset" } });
+  const dead = t.sticker(530, 290, 90, "💀", f);
+  t.nodes.find((n) => n.id === dead)!.hid = true;
+  t.arrow(hero, dead, { lg: { on: "zero", do: "show", tx: "hp", rev: true } });
+  t.progress(500, 430, 460, "Опыт до 2 уровня", 35, { parent: f, color: "green" });
+  t.note(40, 540, 420, "**🎒 Инвентарь**\n- [x] Меч\n- [ ] Зелье лечения ×2\n- [ ] Верёвка, факел", { parent: f, color: "yellow" });
+  t.note(500, 560, 460, "**📜 Задание:** найти пропавший караван у старой мельницы", { parent: f });
+  t.text(500, 690, 460, "«Удар» отнимает здоровье, «Отдых» восстанавливает шкалы. На нуле появится череп.", { parent: f, size: "s", color: "gray" });
+  void d20;
   return t.clip();
 }
 
@@ -477,21 +580,33 @@ function meeting(): Clip {
 
 function sprint(): Clip {
   const t = new TB();
-  t.text(0, -110, 1000, "**Спринт 1** — цель: …", { size: "l" });
-  t.progress(0, -30, 700, "Дни спринта", 0, { steps: 10 });
-  t.counter(740, -60, "Очки в спринте", { color: "violet", w: 200, h: 140 });
-  const cols: [string, ColorName][] = [
-    ["📥 Бэклог", "gray"],
-    ["🏃 В спринте", "blue"],
-    ["👀 Ревью", "yellow"],
-    ["✅ Готово", "green"],
-  ];
-  const f = cols.map(([name, c], i) => t.frame(i * 340, 110, 310, 560, name, c));
-  t.task(20, 160, 270, "Задача из бэклога", { parent: f[0], prio: "low" });
-  t.task(20, 260, 270, "Ещё задача", { parent: f[0] });
-  t.task(360, 160, 270, "Главная задача спринта", { parent: f[1], prio: "high" });
-  t.task(700, 160, 270, "Проверить и влить", { parent: f[2], prio: "mid" });
-  t.poll(1380, 110, 280, "**Оценка задачи** (покер)", ["1", "2", "3", "5", "8", "13", "?"]);
+  t.text(0, -120, 1000, "**Спринт 1** — цель: …", { size: "l" });
+  t.progress(0, -50, 560, "Дни спринта", 0, { steps: 10 });
+  const done = t.progress(600, -50, 500, "Сделано задач", 0, { color: "green" });
+  const kb = t.wd("kanban", 0, 80, {
+    w: 1100,
+    title: "Задачи спринта",
+    kb: [
+      { id: "a", t: "📥 Бэклог", c: "gray" },
+      { id: "b", t: "🏃 В спринте", c: "blue", lim: 4 },
+      { id: "c", t: "👀 Ревью", c: "yellow", lim: 2 },
+      { id: "d", t: "✅ Готово", c: "green" },
+    ],
+    ...cards([
+      ["a", "Задача из бэклога"],
+      ["a", "Ещё задача"],
+      ["b", "Главная задача спринта", "red"],
+      ["b", "Исправить баг со входом", "orange"],
+      ["c", "Проверить и влить"],
+    ]),
+  });
+  t.arrow(kb, done, { route: "straight", lg: { on: "change", do: "share" } });
+  const est = t.wd("estimate", 1160, 80, { title: "Оцениваем задачу", pk: "fib" });
+  const tm = t.timer(1160, 410, 2, "На обсуждение");
+  t.arrow(tm, est, { lg: { on: "end", do: "reveal" } });
+  const sp = t.counter(1420, 410, "Очки в спринте", { color: "violet", w: 200, h: 150 });
+  t.arrow(est, sp, { lg: { on: "reveal", do: "addsrc", rev: false } });
+  t.text(1160, 590, 460, "Каждый выбирает карту вслепую; когда выйдет время, карты откроются сами. Среднее — в счётчик очков.", { size: "s", color: "gray" });
   return t.clip();
 }
 
@@ -583,17 +698,25 @@ export const TEMPLATES: Template[] = [
   { id: "tactics", group: "Игры", label: "Тактическая карта", desc: "Зоны, команды, маршруты и план раунда", words: "игра тактика карта стратегия рейд матч cs dota", build: tactics },
   { id: "bracket", group: "Игры", label: "Турнирная сетка", desc: "8 команд: от четвертьфинала до победы", words: "турнир сетка плей-офф bracket киберспорт", build: bracket },
   { id: "score", group: "Игры", label: "Табло", desc: "Счёт команд, раунды, таймер и кубики", words: "счёт очки игра раунд табло", build: scoreboard },
-  { id: "rpg", group: "Игры", label: "Лист персонажа", desc: "Настольная ролевая: здоровье, d20, опыт", words: "dnd d&d днд ролевая персонаж кубик настолка", build: rpg },
+  { id: "rpg", group: "Игры", label: "Лист персонажа", desc: "Настольная ролевая: шкалы, d20, опыт", words: "dnd d&d днд ролевая персонаж кубик настолка", build: rpg },
   { id: "tier", group: "Игры", label: "Тир-лист", desc: "Расставьте всё от S до D", words: "тир лист рейтинг tier list топ", build: tierList },
-  { id: "gdd", group: "Игры", label: "Диздок игры", desc: "Концепция, цикл, персонажи, уровни", words: "игра gdd геймдизайн разработка", build: gdd },
+  { id: "gdd", group: "Разработка и дизайн", label: "Диздок игры", desc: "Концепция, цикл, персонажи, уровни", words: "игра gdd геймдизайн разработка", build: gdd },
+  { id: "balance", group: "Разработка и дизайн", label: "Баланс прокачки", desc: "Уровень → кривые опыта, силы и цен", words: "баланс формулы кривая опыт уровни прокачка экономика геймдизайн", build: balance },
+  { id: "level", group: "Разработка и дизайн", label: "Карта уровня", desc: "Остров, подземелье, цели и сундук", words: "уровень карта тайлы левел дизайн локация подземелье", build: level },
+  { id: "loot", group: "Разработка и дизайн", label: "Добыча и награды", desc: "Сундук с шансами, кнопка и счётчики", words: "лут дроп сундук награда шанс редкость гача", build: lootbox },
+  { id: "heroes", group: "Разработка и дизайн", label: "Персонажи и враги", desc: "Карточки с шкалами и бой с боссом", words: "персонажи враги босс характеристики hp юниты баланс rpg", build: heroes },
+  { id: "hud", group: "Разработка и дизайн", label: "Интерфейс игры", desc: "Экран 16:9: здоровье, слоты, мини-карта", words: "hud интерфейс игры ui экран меню макет", build: hud },
+  { id: "app", group: "Разработка и дизайн", label: "Макет приложения", desc: "Три экрана телефона и переходы", words: "макет приложение мобильное прототип ui ux экраны вайрфрейм", build: appMockup },
+  { id: "style", group: "Разработка и дизайн", label: "Стайлгайд", desc: "Палитры, шрифты, кнопки и тон", words: "стайлгайд гайдлайн бренд цвета шрифты дизайн-система", build: styleGuide },
+  { id: "playtest", group: "Разработка и дизайн", label: "Плейтест", desc: "Оценки, впечатления и доска багов", words: "плейтест тест отзывы баги фидбек игра", build: playtest },
   /* команда */
   { id: "meeting", group: "Команда", label: "Встреча", desc: "Повестка, обсуждение, решения и задачи", words: "встреча созвон митинг повестка протокол", build: meeting },
   { id: "brainstorm", group: "Команда", label: "Мозговой штурм", desc: "Тема, идеи, таймер и голосование", words: "идеи штурм brainstorm", build: brainstorm },
   { id: "retro", group: "Команда", label: "Ретроспектива", desc: "Хорошо, улучшить, дальше", words: "ретро итоги команда", build: retro },
-  { id: "sprint", group: "Команда", label: "Спринт", desc: "Цель, дни, задачи и покер планирования", words: "спринт scrum скрам оценка покер agile", build: sprint },
-  { id: "kanban", group: "Команда", label: "Канбан", desc: "Колонки задач: идеи → готово", words: "доска задачи проект kanban трелло", build: kanban },
+  { id: "sprint", group: "Команда", label: "Спринт", desc: "Канбан, покер планирования и таймер", words: "спринт scrum скрам оценка покер agile", build: sprint },
+  { id: "kanban", group: "Команда", label: "Канбан", desc: "Колонки, карточки и прогресс", words: "доска задачи проект kanban трелло", build: kanban },
   /* планы */
-  { id: "roadmap", group: "Планы и стратегия", label: "Дорожная карта", desc: "Планы по кварталам", words: "roadmap план сроки этапы", build: roadmap },
+  { id: "roadmap", group: "Планы и стратегия", label: "Дорожная карта", desc: "Этапы по кварталам и готовность", words: "roadmap план сроки этапы гант релиз", build: roadmap },
   { id: "okr", group: "Планы и стратегия", label: "Цели и результаты", desc: "OKR: цели с прогрессом ключевых результатов", words: "okr цели kpi результаты прогресс", build: okr },
   { id: "week", group: "Планы и стратегия", label: "План на неделю", desc: "Семь дней — семь колонок", words: "неделя расписание календарь", build: week },
   { id: "lean", group: "Планы и стратегия", label: "Lean Canvas", desc: "Бизнес-идея на одном листе", words: "бизнес стартап модель lean canvas", build: lean },
@@ -726,6 +849,257 @@ function logicDemo(): Clip {
   return t.clip();
 }
 
+/* ------------------------- разработка и дизайн ------------------------- */
+
+function balance(): Clip {
+  const t = new TB();
+  const f = t.frame(0, 0, 1240, 900, "📈 Баланс прокачки", "violet");
+  const lv = t.widget("slider", 420, 60, 790, 96, { title: "Уровень героя", sv: 10, min: 1, max: 50, step: 1, color: "violet", parent: f });
+  const xp = t.wd("curve", 420, 200, { w: 380, h: 300, title: "Опыт до уровня", min: 1, max: 50, parent: f, fs: [{ id: "a", f: "round(100 * x^1.5)", t: "Опыт", c: "violet" }] });
+  const hero = t.wd("curve", 830, 200, {
+    w: 380,
+    h: 300,
+    title: "Сила героя",
+    min: 1,
+    max: 50,
+    parent: f,
+    fs: [
+      { id: "a", f: "50 + 12x", t: "Здоровье", c: "red" },
+      { id: "b", f: "round(10 * 1.06^x)", t: "Урон", c: "orange" },
+    ],
+  });
+  t.arrow(lv, xp, { dash: "dot" });
+  t.arrow(lv, hero, { dash: "dot" });
+  t.note(40, 60, 340, "**Как пользоваться**\nДвигайте ползунок — кривые отмечают значения на этом уровне.\n\nФормулы — в инспекторе: x — уровень; можно ^, sqrt, log, round, min, max и if(условие, да, нет).", { parent: f, color: "violet" });
+  t.wd("curve", 420, 540, { w: 790, h: 320, title: "Цена улучшения в магазине", min: 1, max: 12, tb: true, parent: f, fs: [{ id: "a", f: "round(50 * 1.35^(x-1))", t: "Цена, золото", c: "yellow" }] });
+  t.note(40, 300, 340, "**💡 Совет**\nКривая опыта растёт быстрее силы — значит, каждый новый уровень даётся дольше. Сравнивайте формулы на одном графике.", { parent: f, color: "yellow" });
+  return t.clip();
+}
+
+function level(): Clip {
+  const t = new TB();
+  const f = t.frame(0, 0, 1260, 680, "🗺️ Уровень 1-1: Остров и подземелье", "green");
+  t.wd("tilemap", 40, 60, {
+    w: 780,
+    h: 520,
+    title: "Карта уровня",
+    parent: f,
+    ...mapRows([
+      "~~~~~~~~~~~~~~~~~~~~",
+      "~ssssss~~~~~WWWWWWW~",
+      "~sggTgs~~~~~W..e..W~",
+      "~sgHggss~~~~W.....W~",
+      "~sggggssss~~W..C..W~",
+      "~sgTgggggs..D.....W~",
+      "~ssggKgggs~~W.....W~",
+      "~~sgggggTs~~W.LLL.W~",
+      "~~ssgEggs~~~W.LLL.W~",
+      "~~~sssss~~~~W.....W~",
+      "~~~~~~~~~~~~WWWWWWW~",
+      "~~~~~~~~~~~~~~~~~~~~",
+    ]),
+  });
+  t.note(860, 60, 360, "**🎯 Цели уровня**\n- [ ] Найти ключ 🔑\n- [ ] Открыть дверь в подземелье\n- [ ] Забрать сундук 💰\n- [ ] Не наступить в лаву", { parent: f, color: "green" });
+  t.wd("loot", 860, 270, { w: 360, title: "Сундук в подземелье", parent: f });
+  t.text(40, 600, 780, "Выделите карту: кисть рисует местность, заливка красит область, ластик стирает. Предметы ставятся поверх клеток.", { parent: f, size: "s", color: "gray" });
+  return t.clip();
+}
+
+function lootbox(): Clip {
+  const t = new TB();
+  const f = t.frame(0, 0, 1100, 640, "🎁 Добыча и награды", "yellow");
+  const chest = t.wd("loot", 40, 60, {
+    w: 380,
+    title: "Сундук героя",
+    parent: f,
+    lo: [
+      { id: "a", t: "🪙 Горсть монет", w: 50, c: "gray" },
+      { id: "b", t: "🧪 Зелье лечения", w: 25, c: "green" },
+      { id: "c", t: "🗡️ Стальной меч", w: 15, c: "blue" },
+      { id: "d", t: "💍 Кольцо силы", w: 8, c: "violet" },
+      { id: "e", t: "🐉 Чешуя дракона", w: 2, c: "orange" },
+    ],
+  });
+  const btn = t.widget("button", 90, 470, 280, 80, { title: "Открыть сундук", emoji: "🗝️", color: "yellow", parent: f });
+  t.arrow(btn, chest, { lg: { on: "press", do: "open" } });
+  const opened = t.counter(520, 70, "Открыто сундуков", { parent: f, w: 280, h: 150 });
+  t.arrow(chest, opened, { lg: { on: "drop", do: "add", n: 1 } });
+  const legend = t.counter(520, 290, "Легендарные находки", { parent: f, color: "orange", w: 280, h: 150 });
+  t.arrow(chest, legend, { lg: { on: "dropx", tx: "🐉 Чешуя дракона", do: "add", n: 1 } });
+  const dragon = t.sticker(890, 305, 120, "🐉", f);
+  t.arrow(legend, dragon, { lg: { on: "inc", do: "fx", x: "fanfare", rev: false } });
+  t.text(520, 490, 540, "Нажмите кнопку — сундук разыграет добычу по весам (шансы — в инспекторе). Выпала легендарка — +1 в счётчик и фанфары у дракона.", { parent: f, size: "s", color: "gray" });
+  return t.clip();
+}
+
+function heroes(): Clip {
+  const t = new TB();
+  const f = t.frame(0, 0, 1260, 480, "⚔️ Персонажи и враги", "pink");
+  const unit = (x: number, title: string, desc: string, emoji: string, pl: { id: string; t: string; c: string; m?: number; v: number }[]) =>
+    t.wd("stats", x, 60, { w: 320, title, desc, emoji, parent: f, pl: pl.map(({ v: _v, ...st }) => st), ...Object.fromEntries(pl.map((st) => [`sc:${st.id}`, st.v])) });
+  unit(40, "Воин", "Танк · ближний бой", "🛡️", [
+    { id: "hp", t: "Здоровье", c: "red", m: 120, v: 120 },
+    { id: "st", t: "Энергия", c: "yellow", m: 60, v: 60 },
+    { id: "atk", t: "Атака", c: "orange", v: 14 },
+    { id: "def", t: "Защита", c: "gray", v: 12 },
+  ]);
+  unit(390, "Маг", "Урон по области", "🔮", [
+    { id: "hp", t: "Здоровье", c: "red", m: 70, v: 70 },
+    { id: "mp", t: "Мана", c: "blue", m: 120, v: 120 },
+    { id: "atk", t: "Атака", c: "orange", v: 20 },
+    { id: "def", t: "Защита", c: "gray", v: 5 },
+  ]);
+  const boss = unit(740, "Каменный голем", "Босс · 1 этап", "🗿", [
+    { id: "hp", t: "Здоровье", c: "red", m: 300, v: 300 },
+    { id: "rage", t: "Ярость", c: "violet", m: 100, v: 30 },
+    { id: "atk", t: "Атака", c: "orange", v: 25 },
+    { id: "def", t: "Защита", c: "gray", v: 18 },
+  ]);
+  const hit = t.widget("button", 740, 340, 150, 72, { title: "Удар −40", emoji: "⚔️", color: "red", parent: f });
+  const heal = t.widget("button", 910, 340, 150, 72, { title: "Заново", emoji: "🔁", parent: f });
+  t.arrow(hit, boss, { lg: { on: "press", do: "sub", n: 40, x: "hp" } });
+  t.arrow(heal, boss, { lg: { on: "press", do: "reset" } });
+  const win = t.sticker(1100, 110, 120, "🏆", f);
+  t.nodes.find((n) => n.id === win)!.hid = true;
+  t.arrow(boss, win, { lg: { on: "zero", tx: "hp", do: "show", rev: true } });
+  t.text(40, 350, 660, "Карточки персонажей — шкалы с пределом и простые числа. Кнопки меняют шкалы через логику: бейте голема, пока не появится кубок.", { parent: f, size: "s", color: "gray" });
+  return t.clip();
+}
+
+function appMockup(): Clip {
+  const t = new TB();
+  const W = 390;
+  const H = 844;
+  const g = 90;
+  const a = t.device(0, 0, "phone", "1. Вход", W, H);
+  t.text(40, 150, W - 80, "**Привет! 👋**", { parent: a, size: "l", align: "center" });
+  t.text(40, 222, W - 80, "Войдите, чтобы продолжить", { parent: a, size: "s", color: "gray", align: "center" });
+  t.shape(40, 300, W - 80, 56, "rect", "Почта", { parent: a, fill: "none", color: "gray" });
+  t.shape(40, 376, W - 80, 56, "rect", "Пароль", { parent: a, fill: "none", color: "gray" });
+  const go = t.shape(40, 470, W - 80, 56, "pill", "**Войти**", { parent: a, fill: "solid", color: "blue" });
+  t.text(40, 545, W - 80, "Забыли пароль?", { parent: a, size: "s", color: "blue", align: "center" });
+
+  const x1 = W + g;
+  const b = t.device(x1, 0, "phone", "2. Лента", W, H);
+  t.text(x1 + 24, 64, 200, "**Лента**", { parent: b, size: "l" });
+  const av = t.shape(x1 + W - 72, 66, 44, 44, "ellipse", "🙂", { parent: b, color: "violet" });
+  for (let i = 0; i < 3; i++) {
+    t.shape(x1 + 24, 140 + i * 200, W - 48, 180, "rect", "", { parent: b, color: i === 1 ? "pink" : "gray" });
+    t.text(x1 + 44, 160 + i * 200, W - 88, `**Пост ${i + 1}**\nКороткое описание`, { parent: b, size: "s" });
+  }
+  ["🏠", "🔍", "➕", "💬", "👤"].forEach((e, i) => t.shape(x1 + 24 + i * 70, H - 104, 56, 56, "ellipse", e, { parent: b, fill: i === 0 ? "solid" : "tint", color: i === 0 ? "blue" : "gray" }));
+
+  const x2 = 2 * (W + g);
+  const c = t.device(x2, 0, "phone", "3. Профиль", W, H);
+  t.shape(x2 + W / 2 - 60, 90, 120, 120, "ellipse", "🙂", { parent: c, color: "violet", size: "xl" });
+  t.text(x2 + 40, 228, W - 80, "**Имя Фамилия**", { parent: c, size: "m", align: "center" });
+  t.text(x2 + 40, 272, W - 80, "@username · Москва", { parent: c, size: "s", color: "gray", align: "center" });
+  ["**128**\nпостов", "**4,2K**\nчитателей", "**310**\nподписок"].forEach((x, i) => t.shape(x2 + 24 + i * 118, 330, 106, 80, "rect", x, { parent: c, fill: "none", color: "gray" }));
+  t.shape(x2 + 40, 440, W - 80, 52, "pill", "Редактировать", { parent: c, fill: "tint", color: "blue" });
+  t.shape(x2 + 24, 520, W - 48, 260, "rect", "Галерея", { parent: c, color: "gray", dash: "dash", fill: "none" });
+
+  t.arrow(go, b, { color: "blue", label: "вход" });
+  t.arrow(av, c, { color: "violet", label: "аватар" });
+  t.note(3 * (W + g), 0, 320, "**📱 Сценарий**\n1. Вход по почте\n2. Лента постов\n3. Профиль по аватару\n\nНовые экраны — «Экран телефона» в библиотеке, раздел «Разработка и дизайн».", { color: "blue" });
+  return t.clip();
+}
+
+function hud(): Clip {
+  const t = new TB();
+  const f = t.device(0, 0, "game", "Бой: интерфейс игрока", 960, 540);
+  t.shape(60, 46, 260, 38, "pill", "❤️ 87 / 100", { parent: f, fill: "solid", color: "red", font: "game" });
+  t.shape(60, 94, 200, 32, "pill", "🔷 40 / 60", { parent: f, fill: "solid", color: "blue", font: "game" });
+  t.text(330, 46, 300, "**Волна 3 · 02:41**", { parent: f, align: "center", font: "game" });
+  t.shape(770, 40, 150, 150, "rect", "Мини-карта", { parent: f, color: "green", font: "game" });
+  t.text(60, 400, 320, "📜 Найти ключ от ворот\n⚔️ Победить стражей 2/5", { parent: f, size: "s", font: "game" });
+  ["⚔️", "🛡️", "🧪", "🏹", "🔥"].forEach((e, i) => t.shape(330 + i * 62, 450, 54, 54, "sharp", e, { parent: f, fill: i === 0 ? "solid" : "tint", color: i === 0 ? "yellow" : "gray", size: "l" }));
+  t.shape(800, 380, 60, 60, "ellipse", "**A**", { parent: f, fill: "solid", color: "green", font: "game" });
+  t.shape(866, 320, 60, 60, "ellipse", "**B**", { parent: f, fill: "solid", color: "red", font: "game" });
+  t.note(1000, 0, 340, "**🎮 Безопасная зона**\nПунктир внутри экрана — края, которые могут обрезать телевизоры. Держите важное внутри.\n\nШрифт кнопок — «Игровой»: выделите текст и смените его в стиле.", { color: "violet" });
+  t.wd("palette", 1000, 260, {
+    w: 340,
+    h: 210,
+    title: "Цвета интерфейса",
+    pm: "chips",
+    sw: [
+      { id: "a", hex: "#e5484d", t: "Здоровье" },
+      { id: "b", hex: "#3e63dd", t: "Мана" },
+      { id: "c", hex: "#f5d90a", t: "Золото" },
+      { id: "d", hex: "#30a46c", t: "Успех" },
+      { id: "e", hex: "#1c2024", t: "Фон" },
+    ],
+  });
+  return t.clip();
+}
+
+function styleGuide(): Clip {
+  const t = new TB();
+  const f = t.frame(0, 0, 1200, 680, "🎨 Стайлгайд", "default");
+  t.wd("palette", 40, 60, {
+    w: 540,
+    title: "Основные цвета",
+    parent: f,
+    sw: [
+      { id: "a", hex: "#1d3557", t: "Ночь" },
+      { id: "b", hex: "#457b9d", t: "Море" },
+      { id: "c", hex: "#a8dadc", t: "Лёд" },
+      { id: "d", hex: "#f1faee", t: "Снег" },
+      { id: "e", hex: "#e63946", t: "Акцент" },
+    ],
+  });
+  t.wd("palette", 40, 250, {
+    w: 540,
+    title: "Состояния",
+    pm: "chips",
+    parent: f,
+    sw: [
+      { id: "a", hex: "#2a9d8f", t: "Успех" },
+      { id: "b", hex: "#e9c46a", t: "Внимание" },
+      { id: "c", hex: "#e76f51", t: "Ошибка" },
+      { id: "d", hex: "#6c757d", t: "Неактивно" },
+    ],
+  });
+  t.text(640, 60, 520, "Заголовок H1", { parent: f, size: "xl", font: "wide" });
+  t.text(640, 140, 520, "Подзаголовок H2", { parent: f, size: "l", font: "geo" });
+  t.text(640, 200, 520, "Основной текст: читается легко и спокойно. Межстрочный интервал — полтора.", { parent: f, size: "m", font: "round" });
+  t.text(640, 290, 520, "Акцент: «Редкий предмет!»", { parent: f, size: "m", font: "game", color: "red" });
+  t.text(640, 340, 520, "Подпись от руки", { parent: f, size: "m", font: "marker", color: "blue" });
+  t.shape(640, 420, 170, 52, "pill", "**Основная**", { parent: f, fill: "solid", color: "blue" });
+  t.shape(830, 420, 170, 52, "pill", "Вторичная", { parent: f, fill: "tint", color: "blue" });
+  t.shape(1020, 420, 140, 52, "pill", "Контур", { parent: f, fill: "none", color: "blue" });
+  t.note(40, 450, 540, "**🗣️ Тон и голос**\n- Говорим просто и на «вы»\n- Коротко: одно действие — одна кнопка\n- Юмор — в мелочах, не в ошибках", { parent: f, color: "cyan" });
+  t.note(640, 510, 520, "**Шрифты:** Широкий — заголовки, Геометрический — подзаголовки, Округлый — текст, Игровой — акценты.\nСменить шрифт: выделите текст → стиль → «Шрифт».", { parent: f, color: "yellow" });
+  return t.clip();
+}
+
+function playtest(): Clip {
+  const t = new TB();
+  const f = t.frame(0, 0, 1220, 720, "🧪 Плейтест", "cyan");
+  t.widget("rating", 40, 60, 320, 96, { title: "Насколько весело?", max: 5, ri: "star", parent: f });
+  t.widget("rating", 40, 176, 320, 96, { title: "Насколько сложно?", max: 5, ri: "heart", parent: f });
+  t.wd("words", 400, 60, { title: "Игра одним словом", parent: f });
+  t.poll(800, 60, 380, "**Что улучшить первым?**", ["Управление", "Сложность", "Графика", "Звук и музыка"], f);
+  t.widget("stopwatch", 40, 296, 320, 110, { title: "Время прохождения", parent: f });
+  t.wd("kanban", 40, 440, {
+    w: 1140,
+    title: "Баги и правки",
+    parent: f,
+    kb: [
+      { id: "a", t: "🐞 Найдено", c: "red" },
+      { id: "b", t: "🔧 Чиним", c: "orange", lim: 3 },
+      { id: "c", t: "🔎 Проверить", c: "blue" },
+      { id: "d", t: "✅ Исправлено", c: "green" },
+    ],
+    ...cards([
+      ["a", "Герой застревает в стене у моста", "red"],
+      ["a", "Нет звука у сундука"],
+      ["b", "Камера дёргается при прыжке"],
+      ["c", "Опечатка в диалоге"],
+    ]),
+  });
+  return t.clip();
+}
+
 /* ------------------------------ миниатюры ------------------------------ */
 
 
@@ -755,6 +1129,11 @@ export function templateThumb(clip: Clip, W = 132, H = 80): string {
     const h = (n.h * k).toFixed(1);
     switch (n.type) {
       case "frame":
+        if (n.dev) {
+          const r = n.dev === "phone" ? Math.min(n.w, n.h) * k * 0.14 : 2;
+          out += `<rect x="${X(n.x)}" y="${Y(n.y)}" width="${w}" height="${h}" rx="${r.toFixed(1)}" style="fill:var(--surface-2);stroke:var(--ink-3)" stroke-width="1.6"/>`;
+          break;
+        }
         out += `<rect x="${X(n.x)}" y="${Y(n.y)}" width="${w}" height="${h}" rx="3" style="fill:${fillOf(n.color, 10)};stroke:${fillOf(n.color === "default" || !n.color ? "gray" : n.color, 55)}" stroke-width="0.8"/>`;
         break;
       case "path": {
@@ -809,6 +1188,60 @@ export function templateThumb(clip: Clip, W = 132, H = 80): string {
       case "button":
         out += `<rect x="${(x + 1).toFixed(1)}" y="${(y + 1).toFixed(1)}" width="${(w - 2).toFixed(1)}" height="${(h - 2).toFixed(1)}" rx="3" style="fill:${n.color && n.color !== "default" ? fillOf(n.color, 85) : "var(--accent)"}"/>`;
         break;
+      case "kanban": {
+        const cols = Array.isArray(n.kb) && n.kb.length ? n.kb : [{ c: "gray" }, { c: "blue" }, { c: "green" }];
+        const cw = w / cols.length;
+        const hh = Math.max(h, w * 0.3);
+        cols.forEach((col, i) => {
+          out += `<rect x="${(x + i * cw + 1).toFixed(1)}" y="${y.toFixed(1)}" width="${(cw - 2).toFixed(1)}" height="${hh.toFixed(1)}" rx="1.5" style="fill:${fillOf(col.c, 22)}"/>`;
+          for (let j = 0; j < 2 - (i % 2); j++) out += `<rect x="${(x + i * cw + 2.5).toFixed(1)}" y="${(y + 3 + j * hh * 0.28).toFixed(1)}" width="${(cw - 5).toFixed(1)}" height="${(hh * 0.2).toFixed(1)}" rx="1" style="fill:var(--surface-1)"/>`;
+        });
+        break;
+      }
+      case "roadmap": {
+        const hh = Math.max(h, w * 0.3);
+        out += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${hh.toFixed(1)}" rx="2" style="fill:var(--surface-3);stroke:var(--line-3)" stroke-width="0.6"/>`;
+        const list = Object.entries(n as unknown as Record<string, unknown>).filter(([key]) => key.startsWith("rb:")).map(([, b]) => b as { s: number; d: number; o: number; c?: string });
+        const pn = Math.max(2, n.pn ?? 8);
+        list.forEach((b, i) => {
+          const bx = x + 2 + ((w - 4) * b.s) / pn;
+          const by = y + 3 + ((hh - 6) * i) / Math.max(1, list.length);
+          out += `<rect x="${bx.toFixed(1)}" y="${by.toFixed(1)}" width="${Math.max(2, ((w - 4) * b.d) / pn - 1).toFixed(1)}" height="${Math.max(1.5, (hh - 6) / Math.max(1, list.length) - 1.2).toFixed(1)}" rx="1" style="fill:${fillOf(b.c, 70)}"/>`;
+        });
+        break;
+      }
+      case "stats":
+      case "loot":
+      case "estimate": {
+        const hh = Math.max(h, w * 0.6);
+        out += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${hh.toFixed(1)}" rx="2" style="fill:var(--surface-3);stroke:var(--line-3)" stroke-width="0.6"/>`;
+        const rows = n.type === "stats" ? (n.pl ?? []).map((x) => x.c) : n.type === "loot" ? (n.lo ?? []).map((x) => x.c) : ["blue", "violet", "pink"];
+        rows.slice(0, 5).forEach((c, i) => {
+          const ry = y + hh * 0.28 + i * hh * 0.14;
+          out += n.type === "estimate" ? `<rect x="${(x + w * (0.12 + i * 0.28)).toFixed(1)}" y="${(y + hh * 0.3).toFixed(1)}" width="${(w * 0.2).toFixed(1)}" height="${(hh * 0.45).toFixed(1)}" rx="1" style="fill:${fillOf(c, 60)}"/>` : `<rect x="${(x + w * 0.1).toFixed(1)}" y="${ry.toFixed(1)}" width="${(w * (0.8 - (i % 3) * 0.15)).toFixed(1)}" height="${Math.max(1, hh * 0.07).toFixed(1)}" rx="1" style="fill:${fillOf(c, 70)}"/>`;
+        });
+        break;
+      }
+      case "curve": {
+        out += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" rx="2" style="fill:var(--surface-3);stroke:var(--line-3)" stroke-width="0.6"/>`;
+        (n.fs ?? []).slice(0, 3).forEach((sr, i) => {
+          let d = "";
+          for (let j = 0; j <= 8; j++) d += `${j ? "L" : "M"}${(x + w * 0.08 + (w * 0.84 * j) / 8).toFixed(1)},${(y + h * 0.88 - h * 0.7 * (j / 8) ** (1.6 - i * 0.4)).toFixed(1)}`;
+          out += `<path d="${d}" fill="none" style="stroke:${fillOf(sr.c, 95)}" stroke-width="1.1"/>`;
+        });
+        break;
+      }
+      case "palette": {
+        const sw = (n.sw ?? []).filter((c) => /^#[\da-f]{6}$/i.test(c.hex));
+        sw.forEach((c, i) => (out += `<rect x="${(x + (w * i) / sw.length).toFixed(1)}" y="${y.toFixed(1)}" width="${(w / sw.length).toFixed(1)}" height="${h.toFixed(1)}" style="fill:${c.hex}"/>`));
+        break;
+      }
+      case "tilemap": {
+        out += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" rx="1.5" style="fill:#3e7fc1"/>`;
+        out += `<ellipse cx="${(x + w * 0.3).toFixed(1)}" cy="${(y + h * 0.5).toFixed(1)}" rx="${(w * 0.22).toFixed(1)}" ry="${(h * 0.32).toFixed(1)}" style="fill:#5a9e4b;stroke:#d8bf73" stroke-width="1.2"/>`;
+        out += `<rect x="${(x + w * 0.62).toFixed(1)}" y="${(y + h * 0.12).toFixed(1)}" width="${(w * 0.32).toFixed(1)}" height="${(h * 0.76).toFixed(1)}" style="fill:#7d808a;stroke:#3c3742" stroke-width="1.2"/>`;
+        break;
+      }
       case "switch":
       case "slider":
       case "rating":

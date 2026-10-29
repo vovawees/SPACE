@@ -83,11 +83,17 @@ export function kanbanDone(p: NodeProps): [number, number] {
   return [by.get(cols.at(-1)!.id)?.length ?? 0, all];
 }
 
-export function addCard(b: Board, v: NodeView, col: string, t: string, at: "start" | "end" = "end"): string {
-  const list = cardsByCol(v.props).get(col) ?? [];
+/** Новая карточка в колонке col (по умолчанию — в первой). */
+export function addCardPatch(p: NodeProps, t: string, col = kanbanCols(p)[0]!.id, at: "start" | "end" = "end"): [string, Patch] {
+  const list = cardsByCol(p).get(col) ?? [];
   const id = nanoid(8);
   const o = at === "start" ? orderBetween(undefined, list[0]?.o) : orderBetween(list.at(-1)?.o, undefined);
-  put(b, v.id, { [cardKey(id)]: { t: t.slice(0, 500), col, o } satisfies KanbanCard });
+  return [id, { [cardKey(id)]: { t: t.slice(0, 500), col, o } satisfies KanbanCard }];
+}
+
+export function addCard(b: Board, v: NodeView, col: string, t: string, at: "start" | "end" = "end"): string {
+  const [id, patch] = addCardPatch(v.props, t, col, at);
+  put(b, v.id, patch);
   return id;
 }
 
@@ -110,19 +116,27 @@ export function setCard(b: Board, v: NodeView, id: string, patch: Partial<Kanban
 export const removeCard = (b: Board, v: NodeView, id: string) => put(b, v.id, { [cardKey(id)]: undefined });
 
 /** Убрать карточки последней колонки («Готово»). */
+export function clearDonePatch(p: NodeProps): Patch {
+  const patch: Patch = {};
+  for (const c of cardsByCol(p).get(kanbanCols(p).at(-1)!.id) ?? []) patch[cardKey(c.id)] = undefined;
+  return patch;
+}
+
 export function clearDone(b: Board, ids: string[]) {
   putMany(
     b,
     ids.flatMap((id) => {
       const v = b.view.get(id);
-      if (v?.type !== "kanban") return [];
-      const last = kanbanCols(v.props).at(-1)!.id;
-      const patch: Patch = {};
-      for (const c of cardsByCol(v.props).get(last) ?? []) patch[cardKey(c.id)] = undefined;
-      return [[id, patch] as [string, Patch]];
+      return v?.type === "kanban" ? [[id, clearDonePatch(v.props)] as [string, Patch]] : [];
     }),
   );
 }
+
+/** Подпись раскладки (для логики): какие карточки в каких колонках. */
+export const kanbanSig = (p: NodeProps) =>
+  [...cardsByCol(p)]
+    .map(([col, list]) => col + ":" + list.map((c) => c.id).join(","))
+    .join(";");
 
 /* ----------------------------- дорожная карта ----------------------------- */
 
@@ -213,6 +227,19 @@ export function statVal(p: NodeProps, id: string): number {
   const x = raw(p)[`sc:${id}`];
   return typeof x === "number" && Number.isFinite(x) ? x : 0;
 }
+/** Значение в пределах шкалы (если у характеристики есть максимум). */
+export const statClamp = (st: Player, n: number) => (st.m ? Math.max(0, Math.min(st.m, n)) : n);
+/** Подпись значений (для логики): id=значение;… */
+export const statsSig = (p: NodeProps) => statsOf(p).map((st) => `${st.id}=${statVal(p, st.id)}`).join(";");
+/** Значение характеристики из подписи; без id — первой. */
+export function sigVal(sig: string, id?: string): number {
+  const parts = sig ? sig.split(";") : [];
+  const hit = (id ? parts.find((x) => x.startsWith(id + "=")) : parts[0]) ?? "";
+  const n = Number(hit.slice(hit.indexOf("=") + 1));
+  return hit && Number.isFinite(n) ? n : 0;
+}
+/** Шкалы — до максимума. */
+export const restorePatch = (p: NodeProps): Patch => Object.fromEntries(statsOf(p).filter((st) => st.m).map((st) => [`sc:${st.id}`, st.m]));
 
 /* ------------------------------ таблица добычи ------------------------------ */
 
@@ -548,16 +575,26 @@ export function pokerReveal(b: Board, ids: string[], on?: boolean) {
   putMany(b, all.map((v) => [v.id, { on: next || undefined }]));
 }
 
+/** Новый раунд: голоса убрать, карты закрыть. */
+export function pokerResetPatch(p: NodeProps): Patch {
+  const patch: Patch = { on: undefined };
+  for (const k of Object.keys(raw(p))) if (k.startsWith("pp:")) patch[k] = undefined;
+  return patch;
+}
+
 export function pokerReset(b: Board, ids: string[]) {
   if (b.readonly) return;
   putMany(
     b,
     ids.flatMap((id) => {
       const v = b.view.get(id);
-      if (v?.type !== "estimate") return [];
-      const patch: Patch = { on: undefined };
-      for (const k of Object.keys(raw(v.props))) if (k.startsWith("pp:")) patch[k] = undefined;
-      return [[id, patch] as [string, Patch]];
+      return v?.type === "estimate" ? [[id, pokerResetPatch(v.props)] as [string, Patch]] : [];
     }),
   );
+}
+
+/** Подпись голосов (для логики): кто что выбрал; «=» — все одинаково. */
+export function pokerSig(p: NodeProps): string {
+  const votes = pokerVotes(p);
+  return votes.map((x) => `${x.id}:${x.v}`).join(",") + (pokerSummary(p).same ? "|=" : "");
 }
