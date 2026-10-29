@@ -30,7 +30,8 @@
       .reverse(),
   );
 
-  // тикает, только пока идёт: с сотыми — каждый кадр, без них — 5 раз в секунду
+  // тикает, только пока идёт: с сотыми — ~25 раз в секунду (чаще глаз не
+  // различает, а каждый кадр перерисовки дорог для всей доски), без них — 5 раз
   $effect(() => {
     if (!running) {
       now = Date.now();
@@ -39,8 +40,10 @@
     let raf = 0;
     let t: ReturnType<typeof setInterval> | undefined;
     if (cs) {
+      let last = 0;
       const loop = () => {
-        now = Date.now();
+        const n = Date.now();
+        if (n - last >= 38) now = last = n;
         raf = requestAnimationFrame(loop);
       };
       loop();
